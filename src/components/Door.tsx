@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import gsap from "gsap";
-import { DOOR } from "@/app/lib/animation/config";
+import { DOOR } from "@/lib/animation/config";
 
 export default function Door({ onOpened }: { onOpened: () => void }) {
   const leftRef = useRef<HTMLSpanElement>(null);

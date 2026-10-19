@@ -1,13 +1,14 @@
 "use client";
 
 import { useEffect, useRef } from "react";
-import { SKY } from "@/app/lib/animation/config";
+import { SKY } from "@/lib/animation/config";
+import { loadStars, type MyStar } from "@/lib/stars";
 
 type Star = {
-  x: number; // 0 to 1 across the screen
-  y: number; // 0 to 1 down the screen
+  x: number;
+  y: number;
   radius: number;
-  depth: number; // 0.2 (far away) to 1 (close), controls parallax
+  depth: number;
   speed: number;
   phase: number;
   color: string;
@@ -27,6 +28,22 @@ function makeStars(count: number): Star[] {
   }));
 }
 
+// A four-pointed sparkle: four curves that pinch toward the center
+function drawSparkle(
+  ctx: CanvasRenderingContext2D,
+  x: number,
+  y: number,
+  r: number
+) {
+  ctx.beginPath();
+  ctx.moveTo(x, y - r);
+  ctx.quadraticCurveTo(x, y, x + r, y);
+  ctx.quadraticCurveTo(x, y, x, y + r);
+  ctx.quadraticCurveTo(x, y, x - r, y);
+  ctx.quadraticCurveTo(x, y, x, y - r);
+  ctx.fill();
+}
+
 export default function Sky() {
   const canvasRef = useRef<HTMLCanvasElement>(null);
 
@@ -44,8 +61,9 @@ export default function Sky() {
     let height = 0;
     let stars: Star[] = [];
     let frameId = 0;
-    const target = { x: 0, y: 0 }; // where the mouse is, from -1 to 1
-    const current = { x: 0, y: 0 }; // where the sky has drifted to so far
+    const myStars: MyStar[] = loadStars();
+    const target = { x: 0, y: 0 };
+    const current = { x: 0, y: 0 };
 
     const resize = () => {
       const dpr = window.devicePixelRatio || 1;
@@ -70,6 +88,7 @@ export default function Sky() {
       current.y += (target.y - current.y) * SKY.parallaxEase;
 
       ctx.clearRect(0, 0, width, height);
+
       for (const s of stars) {
         const px = s.x * width - current.x * SKY.parallaxStrength * s.depth;
         const py = s.y * height - current.y * SKY.parallaxStrength * s.depth;
@@ -83,6 +102,24 @@ export default function Sky() {
         ctx.fill();
       }
       ctx.globalAlpha = 1;
+
+      // your own stars: bigger, glowing and gently pulsing
+      for (const m of myStars) {
+        const px = m.x * width - current.x * SKY.parallaxStrength;
+        const py = m.y * height - current.y * SKY.parallaxStrength;
+        const pulse = reduceMotion ? 1 : 1 + 0.15 * Math.sin(t * 1.5 + m.x * 10);
+        const r = 9 * pulse;
+        const glow = ctx.createRadialGradient(px, py, 0, px, py, r * 3);
+        glow.addColorStop(0, `hsla(${m.hue}, 90%, 82%, 0.55)`);
+        glow.addColorStop(1, `hsla(${m.hue}, 90%, 82%, 0)`);
+        ctx.fillStyle = glow;
+        ctx.beginPath();
+        ctx.arc(px, py, r * 3, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.fillStyle = `hsl(${m.hue}, 90%, 88%)`;
+        drawSparkle(ctx, px, py, r);
+      }
+
       frameId = requestAnimationFrame(draw);
     };
 

@@ -15,3 +15,10 @@ export const DOOR = {
   glowDuration: 0.6,
   ease: "power3.inOut",
 };
+
+export const DESK = {
+  charmsPerKey: 1, // stars that fall each time you type a character
+  gravity: 0.12, // how much faster a charm falls every frame
+  lifeMin: 90, // frames a charm lives (60 frames is about one second)
+  lifeMax: 150,
+};
