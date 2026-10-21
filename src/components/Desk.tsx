@@ -2,9 +2,11 @@
 
 import { useEffect, useRef, useState, useSyncExternalStore } from "react";
 import { useRouter } from "next/navigation";
+import Link from "next/link";
 import gsap from "gsap";
 import { DESK } from "@/lib/animation/config";
-import { addStar, createStar } from "@/lib/stars";
+import { addStar, saveLetter, starFromId } from "@/lib/stars";
+import { getSupabase } from "@/lib/supabase/client";
 
 type Charm = {
   x: number;
@@ -56,6 +58,11 @@ export default function Desk() {
   const [text, setText] = useState("");
   const [openOn, setOpenOn] = useState("");
   const [sealing, setSealing] = useState(false);
+  //new add ons for supabase connnection -  day 3
+  const [isPublic, setIsPublic] = useState(false);
+  const [error, setError] = useState("");
+  // null = still checking, true = signed in, false = signed out
+  const [signedIn, setSignedIn] = useState<boolean | null>(null);
 
   // "" on the server, tomorrow's date in the browser.
   // (useSyncExternalStore means no setState inside an effect.)
@@ -102,9 +109,23 @@ export default function Desk() {
       setText("");
       setOpenOn("");
       setSealing(false);
+      setIsPublic(false);
+      setError("");
     };
   }, []);
 
+  // are we signed in? (the answer arrives a moment later)
+  useEffect(() => {
+    let alive = true;
+    getSupabase()
+      .auth.getUser()
+      .then(({ data }) => {
+        if (alive) setSignedIn(Boolean(data.user));
+      });
+    return () => {
+      alive = false;
+    };
+  }, []);
   // the loop that moves and draws the charms (typing charms + sealing sparkles)
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -216,13 +237,25 @@ export default function Desk() {
     setText(next);
   };
 
-  const canSeal = !sealing && text.trim().length > 0 && openOn !== "";
+    const canSeal =
+    !sealing && signedIn === true && text.trim().length > 0 && openOn !== "";
 
-  const seal = () => {
+    const seal = async () => {
     if (!canSeal) return;
     setSealing(true);
+    setError("");
 
-    const star = createStar(openOn);
+    const star = starFromId(crypto.randomUUID(), openOn);
+
+    try {
+      await saveLetter({ star, body: text, isPublic });
+    } catch (err) {
+      setSealing(false);
+      setError(
+        err instanceof Error ? err.message : "Could not save your letter."
+      );
+      return;
+    }
 
     if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) {
       addStar(star);
@@ -409,6 +442,31 @@ export default function Desk() {
             >
               Seal with a star
             </button>
+                        <label
+              className="flex w-full items-center gap-2 text-sm"
+              style={{ color: "rgba(220, 230, 255, 0.85)" }}
+            >
+              <input
+                type="checkbox"
+                checked={isPublic}
+                onChange={(e) => setIsPublic(e.target.checked)}
+              />
+              Let this open for everyone as a star in the shared sky
+            </label>
+            {signedIn === false && (
+              <p className="w-full text-sm" style={{ color: "#ffe9b0" }}>
+                Please{" "}
+                <Link href="/signin" className="underline">
+                  sign in
+                </Link>{" "}
+                first so your star can be saved.
+              </p>
+            )}
+            {error && (
+              <p className="w-full text-sm" style={{ color: "#ffb4b4" }}>
+                {error}
+              </p>
+            )}
           </div>
         </div>
       </section>
