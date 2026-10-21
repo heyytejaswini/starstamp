@@ -1,36 +1,34 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# Starstamp ✦
 
-## Getting Started
+Letters to your future self, sealed with a star.
 
-First, run the development server:
+You write a letter, choose the day it should open, and seal it. The letter turns into a star that drifts into the night sky. On its day, the star opens and the letter is yours again.
 
-```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
-```
+### 👉 [Try it live](https://starstamp.vercel.app)
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+> Work in progress. A full version with screenshots and a demo video is coming.
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+## What works today
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+- A door intro that opens onto an animated night sky, with twinkling stars and parallax
+- A writing desk with a lamp, falling charm stars, and a "paper becomes a star" sealing animation
+- Sign-in with an emailed magic link, no passwords
+- Letters saved to a real database, with the text of each letter kept private by Row Level Security
+- Your own stars drawn in your sky
+- An account menu with sign in and sign out
 
-## Learn More
+## Coming next
 
-To learn more about Next.js, take a look at the following resources:
+- Letters that unlock on their date, or "when it rains in your city"
+- An hourglass countdown and a page-unfolding reveal
+- A "My Letters" page
+- A shared public sky with live shooting stars, lights, and a report button
+- Mobile polish and reduced-motion support
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+## Built with
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
-
-## Deploy on Vercel
-
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
-
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+- Next.js (App Router) and TypeScript
+- Tailwind CSS
+- GSAP and the Canvas API for animation
+- Supabase for the database and sign-in
+- Vercel for hosting
