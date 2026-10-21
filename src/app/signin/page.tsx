@@ -1,16 +1,38 @@
 "use client";
 
 import Link from "next/link";
-import { useState } from "react";
+import { useEffect, useState } from "react";
+import { useRouter } from "next/navigation";
 import Sky from "@/components/Sky";
 import { getSupabase } from "@/lib/supabase/client";
 
 type Status = "idle" | "sending" | "sent" | "error";
 
 export default function SignInPage() {
+  const router = useRouter();
+  // true while we ask "is someone already signed in?"
+  const [checking, setChecking] = useState(true);
   const [email, setEmail] = useState("");
   const [status, setStatus] = useState<Status>("idle");
   const [message, setMessage] = useState("");
+
+  // if you're already signed in, there's nothing to do here, so go to the sky
+  useEffect(() => {
+    let alive = true;
+    getSupabase()
+      .auth.getUser()
+      .then(({ data }) => {
+        if (!alive) return;
+        if (data.user) {
+          router.replace("/");
+        } else {
+          setChecking(false);
+        }
+      });
+    return () => {
+      alive = false;
+    };
+  }, [router]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -30,6 +52,10 @@ export default function SignInPage() {
       setStatus("sent");
     }
   };
+
+  if (checking) {
+    return <main className="min-h-screen" />;
+  }
 
   return (
     <main className="relative min-h-screen overflow-hidden text-white">
