@@ -14,7 +14,9 @@ export default function AuthCallbackPage() {
     // We just wait until it says "signed in", then move on.
     const { data } = supabase.auth.onAuthStateChange((event, session) => {
       if (session && (event === "SIGNED_IN" || event === "INITIAL_SESSION")) {
-        router.replace("/write");
+        // you just came in through the email link, so skip the door this time
+
+        router.replace("/");
       }
     });
 
