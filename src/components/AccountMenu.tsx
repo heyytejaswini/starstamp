@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { usePathname, useRouter } from "next/navigation";
 import { getSupabase } from "@/lib/supabase/client";
 import { refreshStars } from "@/lib/stars";
@@ -30,6 +30,29 @@ export default function AccountMenu() {
       data.subscription.unsubscribe();
     };
   }, []);
+
+    // The box that holds the button and the dropdown.
+  const boxRef = useRef<HTMLDivElement>(null);
+
+  // While the menu is open, a click anywhere outside the box closes it.
+  useEffect(() => {
+    if (!open) return;
+    const onDown = (e: PointerEvent) => {
+      if (boxRef.current && !boxRef.current.contains(e.target as Node)) {
+        setOpen(false);
+      }
+    };
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setOpen(false);
+    };
+    document.addEventListener("pointerdown", onDown);
+    document.addEventListener("keydown", onKey);
+    return () => {
+      document.removeEventListener("pointerdown", onDown);
+      document.removeEventListener("keydown", onKey);
+    };
+  }, [open]);
+
 
   const signOut = async () => {
     await getSupabase().auth.signOut();
@@ -65,7 +88,7 @@ export default function AccountMenu() {
   const display = handle.charAt(0).toUpperCase() + handle.slice(1);
 
   return (
-    <div className="fixed right-4 top-4 z-40 text-sm">
+        <div ref={boxRef} className="fixed right-4 top-4 z-40 text-sm">
       <button
         type="button"
         onClick={() => setOpen((o) => !o)}
