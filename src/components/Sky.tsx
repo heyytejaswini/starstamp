@@ -44,8 +44,28 @@ function drawSparkle(
   ctx.fill();
 }
 
-export default function Sky() {
+// Today's date as "YYYY-MM-DD", in the visitor's own timezone
+function todayISO() {
+  const d = new Date();
+  const month = String(d.getMonth() + 1).padStart(2, "0");
+  const day = String(d.getDate()).padStart(2, "0");
+  return `${d.getFullYear()}-${month}-${day}`;
+}
+
+const HIT_RADIUS = 28; // how close (in pixels) a click must be to count
+
+type Props = {
+  onStarClick?: (star: MyStar) => void;
+};
+
+export default function Sky({ onStarClick }: Props) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
+
+  // Keep the newest click handler in a ref, so the drawing loop never restarts.
+  const clickRef = useRef(onStarClick);
+  useEffect(() => {
+    clickRef.current = onStarClick;
+  }, [onStarClick]);
 
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -62,8 +82,13 @@ export default function Sky() {
     let stars: Star[] = [];
     let frameId = 0;
     const myStars: MyStar[] = loadStars();
+    const today = todayISO();
     const target = { x: 0, y: 0 };
     const current = { x: 0, y: 0 };
+
+    // Where each of your stars was drawn this frame, so clicks can find them.
+    const spots: { star: MyStar; x: number; y: number }[] = [];
+    let hovered: MyStar | null = null;
 
     const resize = () => {
       const dpr = window.devicePixelRatio || 1;
@@ -80,6 +105,38 @@ export default function Sky() {
     const handleMove = (e: PointerEvent) => {
       target.x = (e.clientX / width - 0.5) * 2;
       target.y = (e.clientY / height - 0.5) * 2;
+    };
+
+    // The closest of your stars to a point, if one is near enough.
+    const findStar = (x: number, y: number): MyStar | null => {
+      let best: MyStar | null = null;
+      let bestDist = HIT_RADIUS * HIT_RADIUS;
+      for (const s of spots) {
+        const dx = s.x - x;
+        const dy = s.y - y;
+        const dist = dx * dx + dy * dy;
+        if (dist < bestDist) {
+          bestDist = dist;
+          best = s.star;
+        }
+      }
+      return best;
+    };
+
+    // Buttons, links, inputs and dialogs on top of the sky keep their own clicks.
+    const isInteractive = (t: EventTarget | null) =>
+      t instanceof Element &&
+      t.closest("a, button, input, textarea, label, [role='dialog']") !== null;
+
+    const handleHover = (e: PointerEvent) => {
+      hovered = isInteractive(e.target) ? null : findStar(e.clientX, e.clientY);
+      document.documentElement.style.cursor = hovered ? "pointer" : "";
+    };
+
+    const handleClick = (e: MouseEvent) => {
+      if (isInteractive(e.target)) return;
+      const star = findStar(e.clientX, e.clientY);
+      if (star) clickRef.current?.(star);
     };
 
     const draw = (time: number) => {
@@ -104,11 +161,17 @@ export default function Sky() {
       ctx.globalAlpha = 1;
 
       // your own stars: bigger, glowing and gently pulsing
+      spots.length = 0;
       for (const m of myStars) {
         const px = m.x * width - current.x * SKY.parallaxStrength;
         const py = m.y * height - current.y * SKY.parallaxStrength;
+        spots.push({ star: m, x: px, y: py });
+
+        const ready = m.openOn !== "" && m.openOn <= today;
+        const isHover = hovered !== null && hovered.id === m.id;
         const pulse = reduceMotion ? 1 : 1 + 0.15 * Math.sin(t * 1.5 + m.x * 10);
-        const r = 9 * pulse;
+        const r = 9 * pulse * (isHover ? 1.3 : 1);
+
         const glow = ctx.createRadialGradient(px, py, 0, px, py, r * 3);
         glow.addColorStop(0, `hsla(${m.hue}, 90%, 82%, 0.55)`);
         glow.addColorStop(1, `hsla(${m.hue}, 90%, 82%, 0)`);
@@ -116,8 +179,19 @@ export default function Sky() {
         ctx.beginPath();
         ctx.arc(px, py, r * 3, 0, Math.PI * 2);
         ctx.fill();
+
         ctx.fillStyle = `hsl(${m.hue}, 90%, 88%)`;
         drawSparkle(ctx, px, py, r);
+
+        // a soft pulsing ring tells you this letter is ready to open
+        if (ready) {
+          const ring = reduceMotion ? 0.5 : 0.5 + 0.5 * Math.sin(t * 2 + m.y * 10);
+          ctx.strokeStyle = `hsla(${m.hue}, 90%, 85%, ${0.25 + 0.45 * ring})`;
+          ctx.lineWidth = 1.5;
+          ctx.beginPath();
+          ctx.arc(px, py, r * 2 + ring * 4, 0, Math.PI * 2);
+          ctx.stroke();
+        }
       }
 
       frameId = requestAnimationFrame(draw);
@@ -126,12 +200,17 @@ export default function Sky() {
     resize();
     window.addEventListener("resize", resize);
     if (!reduceMotion) window.addEventListener("pointermove", handleMove);
+    window.addEventListener("pointermove", handleHover);
+    window.addEventListener("click", handleClick);
     frameId = requestAnimationFrame(draw);
 
     return () => {
       cancelAnimationFrame(frameId);
       window.removeEventListener("resize", resize);
       window.removeEventListener("pointermove", handleMove);
+      window.removeEventListener("pointermove", handleHover);
+      window.removeEventListener("click", handleClick);
+      document.documentElement.style.cursor = "";
     };
   }, []);
 
