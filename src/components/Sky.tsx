@@ -52,6 +52,46 @@ function todayISO() {
   return `${d.getFullYear()}-${month}-${day}`;
 }
 
+// Joins the stars with the shortest set of lines that touches every star once.
+// It starts with star 0, then keeps adding the closest star not yet joined.
+// Each line is a pair of positions in the list: [from, to].
+function buildConstellation(
+  list: MyStar[],
+  width: number,
+  height: number
+): [number, number][] {
+  const edges: [number, number][] = [];
+  if (list.length < 2) return edges;
+
+  const joined = new Array<boolean>(list.length).fill(false);
+  joined[0] = true;
+
+  for (let step = 1; step < list.length; step++) {
+    let bestFrom = -1;
+    let bestTo = -1;
+    let bestDist = Infinity;
+
+    for (let a = 0; a < list.length; a++) {
+      if (!joined[a]) continue;
+      for (let b = 0; b < list.length; b++) {
+        if (joined[b]) continue;
+        const dx = (list[a].x - list[b].x) * width;
+        const dy = (list[a].y - list[b].y) * height;
+        const dist = dx * dx + dy * dy;
+        if (dist < bestDist) {
+          bestDist = dist;
+          bestFrom = a;
+          bestTo = b;
+        }
+      }
+    }
+
+    joined[bestTo] = true;
+    edges.push([bestFrom, bestTo]);
+  }
+  return edges;
+}
+
 const HIT_RADIUS = 28; // how close (in pixels) a click must be to count
 
 type Props = {
@@ -90,6 +130,11 @@ export default function Sky({ onStarClick }: Props) {
     const spots: { star: MyStar; x: number; y: number }[] = [];
     let hovered: MyStar | null = null;
 
+    // Only the stars whose date has arrived, and the lines that join them.
+    const ready = myStars.filter((m) => m.openOn !== "" && m.openOn <= today);
+    const readyIds = new Set(ready.map((m) => m.id));
+    let edges: [number, number][] = [];
+
     const resize = () => {
       const dpr = window.devicePixelRatio || 1;
       width = window.innerWidth;
@@ -100,6 +145,7 @@ export default function Sky({ onStarClick }: Props) {
       canvas.style.height = `${height}px`;
       ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
       stars = makeStars(width < 700 ? SKY.starCountMobile : SKY.starCount);
+      edges = buildConstellation(ready, width, height);
     };
 
     const handleMove = (e: PointerEvent) => {
@@ -139,6 +185,12 @@ export default function Sky({ onStarClick }: Props) {
       if (star) clickRef.current?.(star);
     };
 
+    // Where one of your stars sits on screen right now (including the mouse drift).
+    const posOf = (m: MyStar) => ({
+      x: m.x * width - current.x * SKY.parallaxStrength,
+      y: m.y * height - current.y * SKY.parallaxStrength,
+    });
+
     const draw = (time: number) => {
       const t = time / 1000;
       current.x += (target.x - current.x) * SKY.parallaxEase;
@@ -160,14 +212,48 @@ export default function Sky({ onStarClick }: Props) {
       }
       ctx.globalAlpha = 1;
 
+      // the constellation: glowing threads between the stars that are ready
+      ctx.save();
+      ctx.globalCompositeOperation = "lighter";
+      ctx.lineCap = "round";
+      for (let i = 0; i < edges.length; i++) {
+        const from = ready[edges[i][0]];
+        const to = ready[edges[i][1]];
+        const a = posOf(from);
+        const b = posOf(to);
+        const shimmer = reduceMotion ? 0.7 : 0.55 + 0.25 * Math.sin(t * 1.2 + i);
+
+        const line = ctx.createLinearGradient(a.x, a.y, b.x, b.y);
+        line.addColorStop(0, `hsla(${from.hue}, 90%, 85%, ${shimmer})`);
+        line.addColorStop(1, `hsla(${to.hue}, 90%, 85%, ${shimmer})`);
+
+        ctx.strokeStyle = line;
+        ctx.lineWidth = 1.3;
+        ctx.shadowColor = `hsla(${from.hue}, 100%, 80%, 0.9)`;
+        ctx.shadowBlur = 12;
+        ctx.beginPath();
+        ctx.moveTo(a.x, a.y);
+        ctx.lineTo(b.x, b.y);
+        ctx.stroke();
+
+        // a tiny light drifting along the thread
+        if (!reduceMotion) {
+          const p = (t * 0.12 + i * 0.37) % 1;
+          ctx.shadowBlur = 14;
+          ctx.fillStyle = "rgba(255, 255, 255, 0.9)";
+          ctx.beginPath();
+          ctx.arc(a.x + (b.x - a.x) * p, a.y + (b.y - a.y) * p, 1.8, 0, Math.PI * 2);
+          ctx.fill();
+        }
+      }
+      ctx.restore();
+
       // your own stars: bigger, glowing and gently pulsing
       spots.length = 0;
       for (const m of myStars) {
-        const px = m.x * width - current.x * SKY.parallaxStrength;
-        const py = m.y * height - current.y * SKY.parallaxStrength;
+        const { x: px, y: py } = posOf(m);
         spots.push({ star: m, x: px, y: py });
 
-        const ready = m.openOn !== "" && m.openOn <= today;
         const isHover = hovered !== null && hovered.id === m.id;
         const pulse = reduceMotion ? 1 : 1 + 0.15 * Math.sin(t * 1.5 + m.x * 10);
         const r = 9 * pulse * (isHover ? 1.3 : 1);
@@ -183,14 +269,15 @@ export default function Sky({ onStarClick }: Props) {
         ctx.fillStyle = `hsl(${m.hue}, 90%, 88%)`;
         drawSparkle(ctx, px, py, r);
 
-        // a soft pulsing ring tells you this letter is ready to open
-        if (ready) {
-          const ring = reduceMotion ? 0.5 : 0.5 + 0.5 * Math.sin(t * 2 + m.y * 10);
-          ctx.strokeStyle = `hsla(${m.hue}, 90%, 85%, ${0.25 + 0.45 * ring})`;
-          ctx.lineWidth = 1.5;
-          ctx.beginPath();
-          ctx.arc(px, py, r * 2 + ring * 4, 0, Math.PI * 2);
-          ctx.stroke();
+        // a ready star gets a second sparkle turned 45 degrees: an eight-pointed star
+        if (readyIds.has(m.id)) {
+          const twinkle = reduceMotion ? 1 : 0.8 + 0.2 * Math.sin(t * 2 + m.y * 10);
+          ctx.save();
+          ctx.translate(px, py);
+          ctx.rotate(Math.PI / 4);
+          ctx.fillStyle = `hsl(${m.hue}, 100%, 94%)`;
+          drawSparkle(ctx, 0, 0, r * 0.8 * twinkle);
+          ctx.restore();
         }
       }
 
