@@ -19,7 +19,7 @@ You write a letter, choose the day it should open, and seal it. The letter turns
 
 ## Coming next
 
-- Letters that unlock on their date, or "when it rains in your city"
+- Letters that unlock on the date you choose
 - An hourglass countdown and a page-unfolding reveal
 - A "My Letters" page
 - A shared public sky with live shooting stars, lights, and a report button
