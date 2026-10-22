@@ -4,19 +4,21 @@ import Link from "next/link";
 import { useEffect, useState, useSyncExternalStore } from "react";
 import Sky from "@/components/Sky";
 import Door from "@/components/Door";
-import { refreshStars } from "@/lib/stars";
+import StarCard from "@/components/StarCard";
+import { refreshStars, type MyStar } from "@/lib/stars";
 
 type DoorWindow = Window & { __starstampDoorOpen?: boolean };
 
 export default function Home() {
   const [openedNow, setOpenedNow] = useState(false);
   const [starsReady, setStarsReady] = useState(false);
+  const [selected, setSelected] = useState<MyStar | null>(null);
 
   // true if the door was already opened earlier in this page load
   const openedBefore = useSyncExternalStore(
     () => () => {},
     () => Boolean((window as DoorWindow).__starstampDoorOpen),
-    () => false,
+    () => false
   );
   const doorOpen = openedNow || openedBefore;
 
@@ -38,7 +40,7 @@ export default function Home() {
 
   return (
     <main className="relative min-h-screen overflow-hidden text-white">
-      {starsReady && <Sky />}
+      {starsReady && <Sky onStarClick={setSelected} />}
       {!doorOpen && <Door onOpened={handleOpened} />}
       {doorOpen && (
         <section className="fade-in relative z-10 flex min-h-screen flex-col items-center justify-center px-6 text-center">
@@ -54,14 +56,19 @@ export default function Home() {
           <Link
             href="/write"
             className="mt-10 rounded-full border px-8 py-3 text-sm uppercase tracking-[0.25em]"
-            style={{
-              borderColor: "rgba(255, 233, 176, 0.6)",
-              color: "#ffe9b0",
-            }}
+            style={{ borderColor: "rgba(255, 233, 176, 0.6)", color: "#ffe9b0" }}
           >
             Write a letter
           </Link>
         </section>
+      )}
+
+      {selected && (
+        <StarCard
+          key={selected.id}
+          star={selected}
+          onClose={() => setSelected(null)}
+        />
       )}
     </main>
   );
