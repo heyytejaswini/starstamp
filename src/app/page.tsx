@@ -12,8 +12,12 @@ type DoorWindow = Window & { __starstampDoorOpen?: boolean };
 export default function Home() {
   const [openedNow, setOpenedNow] = useState(false);
   const [starsReady, setStarsReady] = useState(false);
-  const [selected, setSelected] = useState<MyStar | null>(null);
-
+  const [selected, setSelected] = useState<{
+    star: MyStar;
+    x: number;
+    y: number;
+  } | null>(null);
+  
   // true if the door was already opened earlier in this page load
   const openedBefore = useSyncExternalStore(
     () => () => {},
@@ -40,7 +44,9 @@ export default function Home() {
 
   return (
     <main className="relative min-h-screen overflow-hidden text-white">
-      {starsReady && <Sky onStarClick={setSelected} />}
+      {starsReady && (
+        <Sky onStarClick={(star, x, y) => setSelected({ star, x, y })} />
+      )}
       {!doorOpen && <Door onOpened={handleOpened} />}
       {doorOpen && (
         <section className="fade-in relative z-10 flex min-h-screen flex-col items-center justify-center px-6 text-center">
@@ -65,8 +71,9 @@ export default function Home() {
 
       {selected && (
         <StarCard
-          key={selected.id}
-          star={selected}
+          key={selected.star.id}
+          star={selected.star}
+          origin={{ x: selected.x, y: selected.y }}
           onClose={() => setSelected(null)}
         />
       )}

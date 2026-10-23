@@ -95,7 +95,7 @@ function buildConstellation(
 const HIT_RADIUS = 28; // how close (in pixels) a click must be to count
 
 type Props = {
-  onStarClick?: (star: MyStar) => void;
+  onStarClick?: (star: MyStar, x: number, y: number) => void;
 };
 
 export default function Sky({ onStarClick }: Props) {
@@ -153,9 +153,9 @@ export default function Sky({ onStarClick }: Props) {
       target.y = (e.clientY / height - 0.5) * 2;
     };
 
-    // The closest of your stars to a point, if one is near enough.
-    const findStar = (x: number, y: number): MyStar | null => {
-      let best: MyStar | null = null;
+        // The closest of your stars to a point (and where it is drawn), if one is near enough.
+    const findSpot = (x: number, y: number) => {
+      let best: { star: MyStar; x: number; y: number } | null = null;
       let bestDist = HIT_RADIUS * HIT_RADIUS;
       for (const s of spots) {
         const dx = s.x - x;
@@ -163,7 +163,7 @@ export default function Sky({ onStarClick }: Props) {
         const dist = dx * dx + dy * dy;
         if (dist < bestDist) {
           bestDist = dist;
-          best = s.star;
+          best = s;
         }
       }
       return best;
@@ -175,14 +175,15 @@ export default function Sky({ onStarClick }: Props) {
       t.closest("a, button, input, textarea, label, [role='dialog']") !== null;
 
     const handleHover = (e: PointerEvent) => {
-      hovered = isInteractive(e.target) ? null : findStar(e.clientX, e.clientY);
+      const spot = isInteractive(e.target) ? null : findSpot(e.clientX, e.clientY);
+      hovered = spot ? spot.star : null;
       document.documentElement.style.cursor = hovered ? "pointer" : "";
     };
 
     const handleClick = (e: MouseEvent) => {
       if (isInteractive(e.target)) return;
-      const star = findStar(e.clientX, e.clientY);
-      if (star) clickRef.current?.(star);
+      const spot = findSpot(e.clientX, e.clientY);
+      if (spot) clickRef.current?.(spot.star, spot.x, spot.y);
     };
 
     // Where one of your stars sits on screen right now (including the mouse drift).
