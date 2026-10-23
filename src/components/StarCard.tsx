@@ -31,6 +31,15 @@ const CARD_H = 230;
 const GROUP_OFFSET_Y = 20; // the envelope sits a little below the screen centre
 const HAND = "'Segoe Print', 'Bradley Hand', cursive";
 
+/* ---------- colours of the envelope (all in your night-sky palette) ---------- */
+const PAPER = "#98b0e4"; // the front of the envelope
+const FLAP_PAPER = "#abbfec"; // the flap, a touch lighter
+const INK = "#26357c"; // the thin dark-blue pen lines
+const CREAM = "#fff7dd";
+const TEAL = "#7fcfd0";
+const CARD_CREAM = "#fbf6e9";
+const NAVY = "#1a2766";
+
 /* ---------- star -> envelope morph ---------- */
 const N = 120; // points around the outline
 
@@ -62,10 +71,28 @@ function morphPathD(k: number) {
 }
 const MORPH_START = morphPathD(0);
 
+/* ---------- shapes of the envelope ---------- */
+// The front: the pocket, with a V-shaped top edge that ends in a soft round tip
+const FRONT_D =
+  "M0 0 L168 116 Q190 130 212 116 L380 0 L380 236 Q380 240 376 240 L4 240 Q0 240 0 236 Z";
+// The flap: a triangle with a rounded tip, a little bigger than the V so it covers the edge
+const FLAP_D = "M0 0 L380 0 L214 118 Q190 135 166 118 Z";
+
 /* ---------- little drawing helpers ---------- */
 const SPARK = "M0 -8 Q0 0 8 0 Q0 0 0 8 Q0 0 -8 0 Q0 0 0 -8 Z";
 
-// A rectangle whose edges are rows of round bumps (the postcard edge)
+// A five-pointed star outline
+function starD(cx: number, cy: number, outer: number, inner: number) {
+  let d = "";
+  for (let i = 0; i < 10; i++) {
+    const r = i % 2 === 0 ? outer : inner;
+    const a = -Math.PI / 2 + (i * Math.PI) / 5;
+    d += `${i === 0 ? "M" : "L"}${(cx + Math.cos(a) * r).toFixed(1)} ${(cy + Math.sin(a) * r).toFixed(1)} `;
+  }
+  return d + "Z";
+}
+
+// A rectangle whose edges are rows of round bumps (the scalloped panel on the card)
 function scallopPath(w: number, h: number, bump: number) {
   const m = bump / 2;
   const nx = Math.round((w - 2 * m) / bump);
@@ -79,14 +106,20 @@ function scallopPath(w: number, h: number, bump: number) {
   for (let i = 0; i < ny; i++) d += ` a${by / 2} ${by / 2} 0 0 1 0 ${-by}`;
   return d + " Z";
 }
-const SCALLOP = scallopPath(CARD_W, CARD_H, 14);
+const CARD_MARGIN = 10; // the cream border around the scalloped panel
+const PANEL_W = CARD_W - CARD_MARGIN * 2;
+const PANEL_H = CARD_H - CARD_MARGIN * 2;
+const SCALLOP = scallopPath(PANEL_W, PANEL_H, 12);
 
-// The wobbly edge of the wax seal
+// A flat disc of wax with a gently scalloped, slightly uneven edge
 function sealPathD() {
   let d = "";
-  for (let i = 0; i < 72; i++) {
-    const t = (i / 72) * Math.PI * 2;
-    const r = 22 + 1.6 * Math.sin(9 * t) + 0.8 * Math.sin(5 * t + 1);
+  for (let i = 0; i < 80; i++) {
+    const t = (i / 80) * Math.PI * 2;
+    const r =
+      21 +
+      1.5 * Math.sin(11 * t) +
+      0.8 * Math.sin(3 * t + 0.6);
     d += `${i === 0 ? "M" : "L"}${(26 + Math.cos(t) * r).toFixed(1)} ${(26 + Math.sin(t) * r).toFixed(1)} `;
   }
   return d + "Z";
@@ -97,6 +130,72 @@ const LINING_STARS: [number, number][] = [
   [30, 20], [60, 48], [95, 22], [130, 70], [160, 30], [190, 88], [225, 28],
   [255, 66], [290, 22], [325, 50], [350, 24], [200, 50], [110, 100], [270, 100],
 ];
+
+/* ---------- hand-drawn doodles ---------- */
+
+// Every doodle is drawn twice: a flat colour fill, and a thin pen outline on top.
+// The fill is nudged a tiny bit sideways so it doesn't line up perfectly, like real gouache.
+
+function Rabbit() {
+  const body = "M-24 0 C-31 -16 -24 -33 -4 -35 C12 -36 24 -26 24 -12 C24 -5 21 -1 16 0 Z";
+  const ear1 = "M9 -48 C3 -66 9 -78 15 -75 C21 -72 18 -58 18 -50 Z";
+  const ear2 = "M17 -50 C16 -66 24 -76 29 -71 C33 -66 26 -56 24 -49 Z";
+  const mound =
+    "M-36 3 C-30 -4 -10 -7 8 -5 C28 -7 42 -2 40 6 C38 13 12 15 -10 13 C-30 13 -40 9 -36 3 Z";
+  return (
+    <g>
+      <path d={mound} transform="translate(2 1.5)" fill="#f3e6c0" />
+      <path d={mound} fill="none" stroke={INK} strokeOpacity="0.55" strokeWidth="1" strokeDasharray="1.5 3.2" strokeLinecap="round" />
+      <g transform="translate(1.6 1.2)" fill="#fff8e8">
+        <path d={ear1} />
+        <path d={ear2} />
+        <path d={body} />
+        <circle cx="-25" cy="-10" r="4.5" />
+        <circle cx="15" cy="-40" r="11" />
+      </g>
+      <g fill="none" stroke={INK} strokeWidth="1.3" strokeLinecap="round" strokeLinejoin="round" strokeOpacity="0.9">
+        <path d="M9 -48 C3 -66 9 -78 15 -75 C21 -72 18 -58 18 -50" />
+        <path d="M17 -50 C16 -66 24 -76 29 -71 C33 -66 26 -56 24 -49" />
+        <path d={body} />
+        <circle cx="-25" cy="-10" r="4.5" />
+        <circle cx="15" cy="-40" r="11" />
+        <path d="M-12 -8 C-4 -22 12 -20 14 -6" strokeOpacity="0.55" />
+      </g>
+      <circle cx="19.5" cy="-41" r="1.5" fill={INK} />
+      <circle cx="25.5" cy="-37.5" r="1.1" fill={INK} />
+      <path d="M14 -31 q3 2 6 0" fill="none" stroke={INK} strokeWidth="0.9" strokeLinecap="round" strokeOpacity="0.7" />
+    </g>
+  );
+}
+
+function Fish({ x, y, fill }: { x: number; y: number; fill: string }) {
+  const body = "M0 0 C6 -7 16 -7 22 0 C16 7 6 7 0 0 Z";
+  const tail = "M21 0 L29 -6 L28 6 Z";
+  return (
+    <g transform={`translate(${x} ${y})`}>
+      <g transform="translate(1.2 1)" fill={fill}>
+        <path d={body} />
+        <path d={tail} />
+      </g>
+      <g fill="none" stroke={INK} strokeWidth="1.1" strokeLinejoin="round" strokeLinecap="round" strokeOpacity="0.85">
+        <path d={body} />
+        <path d={tail} />
+      </g>
+      <circle cx="6" cy="-1.5" r="1" fill={INK} />
+      <path d="M11 -3 Q13 0 11 3" fill="none" stroke={INK} strokeWidth="0.8" strokeOpacity="0.6" />
+    </g>
+  );
+}
+
+function DoodleStar({ x, y, r, fill }: { x: number; y: number; r: number; fill: string }) {
+  const d = starD(x, y, r, r * 0.48);
+  return (
+    <g>
+      <path d={d} transform="translate(1.2 1)" fill={fill} />
+      <path d={d} fill="none" stroke={INK} strokeWidth="1.2" strokeLinejoin="round" strokeOpacity="0.9" />
+    </g>
+  );
+}
 
 /* ---------- shrink the scene to fit small screens ---------- */
 function subscribeResize(callback: () => void) {
@@ -160,17 +259,14 @@ function Hourglass({ remaining, width }: { remaining: number; width: number }) {
   );
 }
 
-/* ---------- the scalloped postcard ---------- */
-function ScallopCard({
-  tone,
+/* ---------- the card: a cream rectangle with a scalloped night-blue panel inside ---------- */
+function PostCard({
   innerRef,
   children,
 }: {
-  tone: "paper" | "night";
   innerRef: React.Ref<HTMLDivElement>;
   children: React.ReactNode;
 }) {
-  const paper = tone === "paper";
   return (
     <div className="relative" style={{ width: CARD_W, height: CARD_H }}>
       <svg
@@ -179,29 +275,39 @@ function ScallopCard({
         height={CARD_H}
         viewBox={`0 0 ${CARD_W} ${CARD_H}`}
         aria-hidden="true"
-        style={{ filter: "drop-shadow(0 8px 16px rgba(0,0,0,0.35))" }}
+        style={{ filter: "drop-shadow(0 8px 14px rgba(0,0,0,0.4))" }}
       >
-        <path
-          d={SCALLOP}
-          fill={paper ? "#fbf6e9" : "#1a2766"}
-          stroke={paper ? "#e3c98a" : "#ffe9b0"}
-          strokeOpacity={paper ? 1 : 0.5}
-          strokeWidth="1.2"
-        />
-        <rect
-          x="16"
-          y="16"
-          width={CARD_W - 32}
-          height={CARD_H - 32}
-          rx="6"
-          fill="none"
-          stroke={paper ? "#d9b977" : "#ffe9b0"}
-          strokeOpacity="0.55"
-          strokeDasharray="3 5"
-          strokeLinecap="round"
-        />
+        <defs>
+          <clipPath id="cardClip">
+            <rect width={CARD_W} height={CARD_H} rx="3" />
+          </clipPath>
+        </defs>
+        {/* the cream card */}
+        <rect width={CARD_W} height={CARD_H} rx="3" fill={CARD_CREAM} stroke="#e3c98a" strokeWidth="1" />
+        <g clipPath="url(#cardClip)">
+          <rect width={CARD_W} height={CARD_H} filter="url(#grainDark)" opacity="0.16" />
+        </g>
+        {/* the scalloped panel */}
+        <g transform={`translate(${CARD_MARGIN} ${CARD_MARGIN})`}>
+          <path d={SCALLOP} fill={NAVY} />
+          <rect
+            x="14"
+            y="14"
+            width={PANEL_W - 28}
+            height={PANEL_H - 28}
+            rx="4"
+            fill="none"
+            stroke="#ffe9b0"
+            strokeOpacity="0.35"
+            strokeDasharray="3 5"
+            strokeLinecap="round"
+          />
+          {([[14, 14], [PANEL_W - 14, 14], [14, PANEL_H - 14], [PANEL_W - 14, PANEL_H - 14]] as const).map(([x, y], i) => (
+            <path key={i} d={SPARK} transform={`translate(${x} ${y}) scale(0.7)`} fill="#ffe9b0" fillOpacity="0.7" />
+          ))}
+        </g>
       </svg>
-      <div ref={innerRef} className="absolute" style={{ inset: 26, opacity: 0 }}>
+      <div ref={innerRef} className="absolute" style={{ inset: 30, opacity: 0 }}>
         {children}
       </div>
     </div>
@@ -325,7 +431,7 @@ export default function StarCard({ star, origin, onClose }: Props) {
           },
           0.1
         )
-        .to(morphPathEl, { fill: "#8fa8dd", duration: 1.0, ease: "power2.inOut" }, 0.1)
+        .to(morphPathEl, { fill: PAPER, duration: 1.0, ease: "power2.inOut" }, 0.1)
         // 2. the drawn envelope fades in over the shape
         .to(morph, { opacity: 0, duration: 0.3 }, 1.0)
         .to(group, { opacity: 1, duration: 0.3 }, 1.0)
@@ -463,23 +569,53 @@ export default function StarCard({ star, origin, onClose }: Props) {
           className="pointer-events-auto absolute inset-0"
           style={{ opacity: 0, perspective: 900, isolation: "isolate" }}
         >
+          {/* shared "paint effects": wobbly pen lines, paper grain, soft shadow */}
+          <svg width="0" height="0" style={{ position: "absolute" }} aria-hidden="true">
+            <defs>
+              <filter id="wobble" filterUnits="userSpaceOnUse" x="-10" y="-10" width="420" height="300" colorInterpolationFilters="sRGB">
+                <feTurbulence type="fractalNoise" baseFrequency="0.04" numOctaves="2" seed="8" result="w" />
+                <feDisplacementMap in="SourceGraphic" in2="w" scale="3" xChannelSelector="R" yChannelSelector="G" />
+              </filter>
+              <filter id="wobbleSm" filterUnits="userSpaceOnUse" x="-10" y="-10" width="420" height="300" colorInterpolationFilters="sRGB">
+                <feTurbulence type="fractalNoise" baseFrequency="0.09" numOctaves="2" seed="3" result="w" />
+                <feDisplacementMap in="SourceGraphic" in2="w" scale="2.6" xChannelSelector="R" yChannelSelector="G" />
+              </filter>
+              <filter id="grainLight" filterUnits="userSpaceOnUse" x="0" y="0" width="400" height="300" colorInterpolationFilters="sRGB">
+                <feTurbulence type="fractalNoise" baseFrequency="0.8" numOctaves="2" seed="5" />
+                <feColorMatrix type="matrix" values="0 0 0 0 1  0 0 0 0 1  0 0 0 0 0.95  2.6 0 0 0 -1.15" />
+              </filter>
+              <filter id="grainDark" filterUnits="userSpaceOnUse" x="0" y="0" width="400" height="300" colorInterpolationFilters="sRGB">
+                <feTurbulence type="fractalNoise" baseFrequency="0.7" numOctaves="2" seed="11" />
+                <feColorMatrix type="matrix" values="0 0 0 0 0.1  0 0 0 0 0.15  0 0 0 0 0.4  2.6 0 0 0 -1.1" />
+              </filter>
+              <filter id="fibre" filterUnits="userSpaceOnUse" x="0" y="0" width="400" height="300" colorInterpolationFilters="sRGB">
+                <feTurbulence type="fractalNoise" baseFrequency="0.015 0.35" numOctaves="3" seed="2" />
+                <feColorMatrix type="matrix" values="0 0 0 0 0.15  0 0 0 0 0.2  0 0 0 0 0.5  2.2 0 0 0 -0.95" />
+              </filter>
+              <filter id="softShadow" filterUnits="userSpaceOnUse" x="-20" y="-20" width="420" height="190">
+                <feGaussianBlur stdDeviation="3" />
+              </filter>
+            </defs>
+          </svg>
+
           {/* inside of the envelope */}
           <div ref={backRef} className="absolute inset-0" style={{ zIndex: 1 }}>
             <svg width={ENV_W} height={ENV_H} viewBox={`0 0 ${ENV_W} ${ENV_H}`} aria-hidden="true">
-              <rect width={ENV_W} height={ENV_H} rx="8" fill="#2a3a85" />
+              <rect width={ENV_W} height={ENV_H} rx="4" fill="#2a3a85" />
               {LINING_STARS.map(([x, y], i) => (
                 <circle key={i} cx={x} cy={y} r={i % 3 === 0 ? 1.6 : 1} fill="#ffe9b0" opacity="0.5" />
               ))}
+              <rect width={ENV_W} height={ENV_H} filter="url(#grainLight)" opacity="0.25" />
             </svg>
           </div>
 
           {/* the card, resting inside */}
           <div ref={cardRef} className="absolute" style={{ left: (ENV_W - CARD_W) / 2, top: 8, zIndex: 2 }}>
-            <ScallopCard tone={view.kind === "open" ? "paper" : "night"} innerRef={contentRef}>
+            <PostCard innerRef={contentRef}>
               {view.kind === "loading" && (
                 <p
                   className="flex h-full items-center justify-center text-sm"
-                  style={{ color: "rgba(220, 230, 255, 0.7)", fontFamily: HAND }}
+                  style={{ color: "rgba(255, 247, 221, 0.7)", fontFamily: HAND }}
                 >
                   Listening to the star...
                 </p>
@@ -498,12 +634,12 @@ export default function StarCard({ star, origin, onClose }: Props) {
                     <p className="text-xl" style={{ color: "#ffe9b0", fontFamily: HAND }}>
                       Not yet
                     </p>
-                    <p className="mt-1 text-sm" style={{ color: "rgba(220, 230, 255, 0.9)" }}>
+                    <p className="mt-1 text-sm" style={{ color: "rgba(244, 239, 224, 0.92)" }}>
                       {view.daysLeft > 0
                         ? `${view.daysLeft} ${view.daysLeft === 1 ? "day" : "days"} until ${opensOn}.`
                         : "Any moment now."}
                     </p>
-                    <p className="mt-2 text-xs" style={{ color: "rgba(220, 230, 255, 0.55)" }}>
+                    <p className="mt-2 text-xs" style={{ color: "rgba(244, 239, 224, 0.6)" }}>
                       Sealed on {written}. Your younger self is keeping it safe.
                     </p>
                   </div>
@@ -512,7 +648,7 @@ export default function StarCard({ star, origin, onClose }: Props) {
 
               {view.kind === "open" && (
                 <div className="flex h-full flex-col">
-                  <p className="text-[11px] uppercase tracking-[0.15em]" style={{ color: "#9a7b3c" }}>
+                  <p className="text-[11px] uppercase tracking-[0.15em]" style={{ color: "rgba(255, 233, 176, 0.8)" }}>
                     A letter from {written}
                   </p>
                   <div
@@ -521,80 +657,77 @@ export default function StarCard({ star, origin, onClose }: Props) {
                       fontFamily: HAND,
                       fontSize: 14,
                       lineHeight: "22px",
-                      color: "#2b2b3a",
+                      color: "#f6f0df",
                       scrollbarWidth: "thin",
-                      scrollbarColor: "#d9b977 transparent",
+                      scrollbarColor: "rgba(255, 233, 176, 0.5) transparent",
                     }}
                   >
                     {view.body}
                   </div>
                 </div>
               )}
-            </ScallopCard>
+            </PostCard>
           </div>
 
           {/* the front of the envelope */}
           <div ref={frontRef} className="absolute inset-0" style={{ zIndex: 3 }}>
             <svg width={ENV_W} height={ENV_H} viewBox={`0 0 ${ENV_W} ${ENV_H}`} aria-hidden="true">
               <defs>
-                <linearGradient id="frontGrad" x1="0" y1="0" x2="0" y2="1">
-                  <stop offset="0" stopColor="#a3b9ea" />
-                  <stop offset="1" stopColor="#869fd6" />
-                </linearGradient>
-                <linearGradient id="windowGrad" x1="0" y1="0" x2="0" y2="1">
-                  <stop offset="0" stopColor="#0b1026" />
-                  <stop offset="1" stopColor="#1b2a6b" />
-                </linearGradient>
+                <clipPath id="frontClip">
+                  <path d={FRONT_D} />
+                </clipPath>
               </defs>
-              <path
-                d="M0 0 L190 128 L380 0 L380 232 Q380 240 372 240 L8 240 Q0 240 0 232 Z"
-                fill="url(#frontGrad)"
-              />
-              <path d="M0 0 L190 128 L380 0" fill="none" stroke="rgba(255,255,255,0.7)" strokeWidth="1.5" />
-              <path
-                d="M14 3 L190 116 L366 3"
-                fill="none"
-                stroke="#fff7dd"
-                strokeOpacity="0.7"
-                strokeWidth="1.2"
-                strokeDasharray="3 5"
-                strokeLinecap="round"
-              />
 
-              {/* doodles */}
-              <path
-                d="M40 228 C 100 214, 160 234, 220 224 S 320 218, 350 228"
-                fill="none"
-                stroke="#fff7dd"
-                strokeOpacity="0.7"
-                strokeWidth="1.3"
-                strokeDasharray="2 7"
-                strokeLinecap="round"
-              />
-              <path d="M0 -14 A14 14 0 1 0 14 8 A11 11 0 1 1 0 -14 Z" transform="translate(152 208) scale(0.7)" fill="#fff7dd" fillOpacity="0.85" />
-              {([[126, 148, 0.8], [236, 146, 0.6], [264, 212, 0.9], [18, 176, 0.7], [366, 128, 0.6]] as const).map(([x, y, s], i) => (
-                <path key={i} d={SPARK} transform={`translate(${x} ${y}) scale(${s})`} fill="#fff7dd" fillOpacity="0.85" />
-              ))}
+              {/* flat paper colour */}
+              <path d={FRONT_D} fill={PAPER} />
 
-              {/* the little window with a star inside */}
-              <rect x="30" y="140" width="72" height="72" rx="10" fill="url(#windowGrad)" stroke="#fff7dd" strokeWidth="2" />
-              <rect x="35" y="145" width="62" height="62" rx="7" fill="none" stroke="#fff7dd" strokeOpacity="0.5" strokeDasharray="2 4" strokeLinecap="round" />
-              <path className="twinkle" d={SPARK} transform="translate(66 176) scale(2.2)" fill="#ffe9b0" />
-              <circle cx="46" cy="160" r="1.2" fill="#fff" opacity="0.7" />
-              <circle cx="86" cy="194" r="1.4" fill="#fff" opacity="0.7" />
-              <circle cx="82" cy="156" r="1" fill="#fff" opacity="0.7" />
+              {/* doodles, drawn with a slightly shaky pen */}
+              <g filter="url(#wobble)">
+                <g transform="translate(58 218)">
+                  <Rabbit />
+                </g>
+                <DoodleStar x={108} y={131} r={6} fill={CREAM} />
+                <DoodleStar x={34} y={68} r={7} fill={CREAM} />
+                <DoodleStar x={64} y={104} r={4.5} fill={TEAL} />
+                <DoodleStar x={346} y={62} r={6} fill={CREAM} />
+                <DoodleStar x={318} y={102} r={4} fill={TEAL} />
+                {/* a little moon */}
+                <g transform="translate(262 112)">
+                  <path d="M0 -9 A9 9 0 1 0 9 6 A7 7 0 1 1 0 -9 Z" transform="translate(1.2 1)" fill={CREAM} />
+                  <path d="M0 -9 A9 9 0 1 0 9 6 A7 7 0 1 1 0 -9 Z" fill="none" stroke={INK} strokeWidth="1.2" strokeLinejoin="round" strokeOpacity="0.9" />
+                </g>
+                {/* a row of little fish, swimming along the bottom */}
+                <Fish x={136} y={227} fill="#fff8e8" />
+                <Fish x={176} y={227} fill={TEAL} />
+                <Fish x={216} y={227} fill="#5a74bd" />
+                {/* tiny sparkles and a dotted trail */}
+                {([[142, 100, 0.8], [236, 92, 0.65], [20, 150, 0.7], [364, 150, 0.6], [86, 128, 0.5]] as const).map(([x, y, s], i) => (
+                  <path key={i} d={SPARK} transform={`translate(${x} ${y}) scale(${s})`} fill={CREAM} fillOpacity="0.9" stroke={INK} strokeWidth="0.8" strokeOpacity="0.5" />
+                ))}
+                <path d="M92 168 C 100 156, 104 148, 108 140" fill="none" stroke={INK} strokeOpacity="0.55" strokeWidth="1.1" strokeDasharray="1.5 4" strokeLinecap="round" />
+              </g>
 
-              {/* the address, in handwriting */}
-              <text x="116" y="170" fontSize="21" fill="#fff7dd" fontFamily={HAND} transform="rotate(-4 116 170)">
+              {/* the handwritten label: a stepped patch of paint with writing on it */}
+              <g filter="url(#wobbleSm)">
+                <path
+                  d="M126 160 L206 156 L208 169 L268 165 L271 194 L130 198 Z"
+                  fill="#5a74bd"
+                  stroke={INK}
+                  strokeOpacity="0.7"
+                  strokeWidth="1.1"
+                  strokeLinejoin="round"
+                />
+              </g>
+              <text x="138" y="186" fontSize="18" fill={CREAM} fontFamily={HAND} transform="rotate(-2 138 186)">
                 for future me
               </text>
-              <text x="118" y="194" fontSize="11" fill="#fff7dd" fillOpacity="0.85" fontFamily={HAND}>
+              <text x="132" y="213" fontSize="11" fill={INK} fillOpacity="0.9" fontFamily={HAND}>
                 from your younger self ✦
               </text>
 
               {/* the stamp, with a star in your star's colour */}
               <g transform="translate(298 142)">
-                <rect x="0" y="0" width="54" height="66" fill="#fbf3dc" stroke="#97afe3" strokeWidth="5" strokeDasharray="0 6" strokeLinecap="round" />
+                <rect x="0" y="0" width="54" height="66" fill="#fbf3dc" stroke={PAPER} strokeWidth="5" strokeDasharray="0 6" strokeLinecap="round" />
                 <rect x="6" y="6" width="42" height="42" rx="2" fill="#1b2a6b" />
                 <path d={SPARK} transform="translate(27 27) scale(1.7)" fill={`hsl(${star.hue}, 90%, 85%)`} />
                 <text x="27" y="60" fontSize="6" textAnchor="middle" fill="#3a2f1f" letterSpacing="1">
@@ -603,12 +736,30 @@ export default function StarCard({ star, origin, onClose }: Props) {
               </g>
 
               {/* the postmark */}
-              <g transform="translate(288 198)" opacity="0.75">
-                <circle r="21" fill="none" stroke="#1b2a6b" strokeWidth="1.2" strokeDasharray="2 2.5" />
-                <circle r="15" fill="none" stroke="#1b2a6b" strokeWidth="0.8" />
+              <g transform="translate(286 216)" opacity="0.9" filter="url(#wobbleSm)">
+                <circle r="21" fill="none" stroke="#1b2a6b" strokeWidth="1.4" strokeDasharray="2 2.5" />
+                <circle r="15" fill="none" stroke="#1b2a6b" strokeWidth="1" />
                 <text y="2.5" fontSize="6" textAnchor="middle" fill="#1b2a6b">
                   {shortDate}
                 </text>
+              </g>
+
+              {/* the pen outline around the whole envelope */}
+              <path
+                d={FRONT_D}
+                fill="none"
+                stroke={INK}
+                strokeOpacity="0.65"
+                strokeWidth="1.4"
+                strokeLinejoin="round"
+                filter="url(#wobble)"
+              />
+
+              {/* paper texture on top of everything */}
+              <g clipPath="url(#frontClip)" style={{ pointerEvents: "none" }}>
+                <rect width={ENV_W} height={ENV_H} filter="url(#fibre)" opacity="0.2" />
+                <rect width={ENV_W} height={ENV_H} filter="url(#grainDark)" opacity="0.3" />
+                <rect width={ENV_W} height={ENV_H} filter="url(#grainLight)" opacity="0.35" />
               </g>
             </svg>
           </div>
@@ -630,25 +781,43 @@ export default function StarCard({ star, origin, onClose }: Props) {
               className="absolute inset-0"
               style={{ backfaceVisibility: "hidden", WebkitBackfaceVisibility: "hidden" }}
             >
-              <svg width={ENV_W} height={FLAP_H} viewBox={`0 0 ${ENV_W} ${FLAP_H}`} aria-hidden="true">
+              <svg width={ENV_W} height={FLAP_H} viewBox={`0 0 ${ENV_W} ${FLAP_H}`} aria-hidden="true" style={{ overflow: "visible" }}>
                 <defs>
-                  <linearGradient id="flapGrad" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="0" stopColor="#bccdf2" />
-                    <stop offset="1" stopColor="#9db4e6" />
-                  </linearGradient>
+                  <clipPath id="flapClip">
+                    <path d={FLAP_D} />
+                  </clipPath>
                 </defs>
-                <path d="M0 0 L380 0 L190 135 Z" fill="url(#flapGrad)" stroke="rgba(255,255,255,0.7)" strokeWidth="1.5" strokeLinejoin="round" />
+                {/* soft shadow the flap throws on the envelope */}
+                <path d={FLAP_D} transform="translate(0 5)" fill="rgba(20, 30, 90, 0.35)" filter="url(#softShadow)" />
+                <path d={FLAP_D} fill={FLAP_PAPER} />
+                <g filter="url(#wobble)">
+                  <path
+                    d="M22 6 L170 107 Q190 121 210 107 L358 6"
+                    fill="none"
+                    stroke={INK}
+                    strokeOpacity="0.45"
+                    strokeWidth="1.1"
+                    strokeDasharray="1.5 6"
+                    strokeLinecap="round"
+                  />
+                  <DoodleStar x={112} y={36} r={6} fill={CREAM} />
+                  <DoodleStar x={272} y={32} r={5} fill={TEAL} />
+                  <path d={SPARK} transform="translate(190 30) scale(0.7)" fill={CREAM} stroke={INK} strokeWidth="0.8" strokeOpacity="0.5" />
+                </g>
                 <path
-                  d="M18 8 L190 118 L362 8"
+                  d={FLAP_D}
                   fill="none"
-                  stroke="#fff7dd"
-                  strokeOpacity="0.7"
-                  strokeWidth="1.2"
-                  strokeDasharray="3 5"
-                  strokeLinecap="round"
+                  stroke={INK}
+                  strokeOpacity="0.65"
+                  strokeWidth="1.4"
+                  strokeLinejoin="round"
+                  filter="url(#wobble)"
                 />
-                <path d={SPARK} transform="translate(120 30) scale(0.7)" fill="#fff7dd" fillOpacity="0.8" />
-                <path d={SPARK} transform="translate(265 26) scale(0.9)" fill="#fff7dd" fillOpacity="0.8" />
+                <g clipPath="url(#flapClip)" style={{ pointerEvents: "none" }}>
+                  <rect width={ENV_W} height={FLAP_H} filter="url(#fibre)" opacity="0.2" />
+                  <rect width={ENV_W} height={FLAP_H} filter="url(#grainDark)" opacity="0.3" />
+                  <rect width={ENV_W} height={FLAP_H} filter="url(#grainLight)" opacity="0.35" />
+                </g>
               </svg>
             </div>
             <div
@@ -661,28 +830,32 @@ export default function StarCard({ star, origin, onClose }: Props) {
               }}
             >
               <svg width={ENV_W} height={FLAP_H} viewBox={`0 0 ${ENV_W} ${FLAP_H}`} aria-hidden="true">
-                <path d="M0 0 L380 0 L190 135 Z" fill="#27357f" stroke="rgba(255,233,176,0.35)" strokeWidth="1" strokeLinejoin="round" />
+                <path d={FLAP_D} fill="#27357f" stroke="rgba(255,233,176,0.35)" strokeWidth="1" strokeLinejoin="round" />
                 {LINING_STARS.slice(0, 9).map(([x, y], i) => (
                   <circle key={i} cx={x} cy={Math.min(y, 70) * 0.9} r={i % 3 === 0 ? 1.6 : 1} fill="#ffe9b0" opacity="0.55" />
                 ))}
+                <path d={FLAP_D} fill="none" stroke={INK} strokeOpacity="0.6" strokeWidth="1.2" strokeLinejoin="round" filter="url(#wobble)" />
               </svg>
             </div>
           </div>
 
-          {/* the wax seal on the flap tip */}
+          {/* the wax seal on the flap tip: a flat blob of wax pressed with a little star */}
           <div ref={sealRef} className="absolute" style={{ left: 164, top: 102, width: 52, height: 52, zIndex: 6, opacity: 0 }}>
             <svg width="52" height="52" viewBox="0 0 52 52" aria-hidden="true">
               <defs>
-                <radialGradient id="waxGrad" cx="40%" cy="35%" r="70%">
-                  <stop offset="0" stopColor="#f7e0a0" />
-                  <stop offset="0.6" stopColor="#d9a94c" />
-                  <stop offset="1" stopColor="#b07a2a" />
-                </radialGradient>
+                <clipPath id="sealClip">
+                  <path d={SEAL_PATH} />
+                </clipPath>
               </defs>
-              <path d={SEAL_PATH} fill="url(#waxGrad)" />
-              <circle cx="26" cy="26" r="15" fill="none" stroke="rgba(120,70,10,0.45)" strokeWidth="1.2" />
-              <path d={SPARK} transform="translate(26.6 26.6) scale(1.6)" fill="rgba(255,240,200,0.6)" />
-              <path d={SPARK} transform="translate(26 26) scale(1.6)" fill="#a8741f" />
+              <g filter="url(#wobbleSm)">
+                <path d={SEAL_PATH} transform="translate(1.6 2)" fill="rgba(30, 20, 70, 0.4)" />
+                <path d={SEAL_PATH} fill="#d3a24c" stroke="#8a5d1c" strokeOpacity="0.8" strokeWidth="1.3" strokeLinejoin="round" />
+                <circle cx="26" cy="26" r="14" fill="none" stroke="#8a5d1c" strokeOpacity="0.6" strokeWidth="1.1" strokeDasharray="2.5 2.8" strokeLinecap="round" />
+                <path d={starD(26.5, 26.5, 9.5, 4.4)} fill="#a8741f" fillOpacity="0.55" stroke="#6b430f" strokeWidth="1.4" strokeLinejoin="round" />
+              </g>
+              <g clipPath="url(#sealClip)">
+                <rect width="52" height="52" filter="url(#grainDark)" opacity="0.22" />
+              </g>
             </svg>
           </div>
 
