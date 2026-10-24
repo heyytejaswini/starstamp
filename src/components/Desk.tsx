@@ -7,6 +7,9 @@ import gsap from "gsap";
 import { DESK } from "@/lib/animation/config";
 import { addStar, saveLetter, starFromId } from "@/lib/stars";
 import { getSupabase } from "@/lib/supabase/client";
+import EnvelopePicker from "@/components/envelope/EnvelopePicker";
+import SealingScene, { type SealSceneHandle } from "@/components/envelope/SealingScene";
+import { DEFAULT_ENVELOPE, saveEnvelope, type EnvelopeOptions } from "@/lib/envelope";
 
 type Charm = {
   x: number;
@@ -63,6 +66,8 @@ export default function Desk() {
   const [error, setError] = useState("");
   // null = still checking, true = signed in, false = signed out
   const [signedIn, setSignedIn] = useState<boolean | null>(null);
+  // which envelope the person picked (design A until they change it)
+  const [envelope, setEnvelope] = useState<EnvelopeOptions>(DEFAULT_ENVELOPE);
 
   // "" on the server, tomorrow's date in the browser.
   // (useSyncExternalStore means no setState inside an effect.)
@@ -80,6 +85,7 @@ export default function Desk() {
   const starRef = useRef<HTMLSpanElement>(null);
   const charmsRef = useRef<Charm[]>([]);
   const timelineRef = useRef<gsap.core.Timeline | null>(null);
+  const sceneRef = useRef<SealSceneHandle>(null);
 
   // Clean slate when the desk appears; reset everything when it leaves.
   // The state resets live in the cleanup function (allowed), not the effect body.
@@ -111,6 +117,7 @@ export default function Desk() {
       setSealing(false);
       setIsPublic(false);
       setError("");
+      setEnvelope(DEFAULT_ENVELOPE);
     };
   }, []);
 
@@ -197,40 +204,6 @@ export default function Desk() {
     }
   };
 
-  // a soft burst of sparkles that drift and sink slowly (used while sealing)
-  const burst = (x: number, y: number, count: number) => {
-    for (let i = 0; i < count; i++) {
-      const angle = Math.random() * Math.PI * 2;
-      const speed = 1 + Math.random() * 3.5;
-      const maxLife = 60 + Math.random() * 50;
-      charmsRef.current.push({
-        x,
-        y,
-        vx: Math.cos(angle) * speed,
-        vy: Math.sin(angle) * speed - 1,
-        size: 8 + Math.random() * 14,
-        life: maxLife,
-        maxLife,
-        gravityScale: 0.25,
-      });
-    }
-  };
-
-  // one tiny sparkle left behind the flying star
-  const trail = (x: number, y: number) => {
-    const maxLife = 40 + Math.random() * 25;
-    charmsRef.current.push({
-      x: x + (Math.random() - 0.5) * 16,
-      y: y + (Math.random() - 0.5) * 16,
-      vx: (Math.random() - 0.5) * 0.4,
-      vy: Math.random() * 0.3,
-      size: 6 + Math.random() * 8,
-      life: maxLife,
-      maxLife,
-      gravityScale: 0.15,
-    });
-  };
-
   const handleChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
     const next = e.target.value;
     if (next.length > text.length) spawnCharms();
@@ -257,106 +230,26 @@ export default function Desk() {
       return;
     }
 
+    // remember which envelope this letter was sealed in (never blocks sealing if it fails)
+    await saveEnvelope(star.id, envelope);
+
     if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) {
       addStar(star);
       router.push("/");
       return;
     }
 
-    const paper = paperRef.current;
-    const ink = inkRef.current;
-    const starEl = starRef.current;
-    if (!paper || !ink || !starEl) return;
-
-    // centre of the paper (we never move the paper, so the star starts exactly here)
-    const pr = paper.getBoundingClientRect();
-    const cx = pr.left + pr.width / 2;
-    const cy = pr.top + pr.height / 2;
-    // where the star will live in the sky
-    const tx = star.x * window.innerWidth;
-    const ty = star.y * window.innerHeight;
-
-    gsap.set(starEl, {
-      left: cx,
-      top: cy,
-      xPercent: -50,
-      yPercent: -50,
-      x: 0,
-      y: 0,
-      rotate: 0,
-      scale: 0,
-      opacity: 0,
-      color: `hsl(${star.hue}, 90%, 85%)`,
+    // the new sealing animation: the letter folds into the envelope, the envelope
+    // is sealed, turns into a star and flies to its place in the sky
+    await sceneRef.current?.play({
+      envelope,
+      openOn,
+      hue: star.hue,
+      target: { x: star.x * window.innerWidth, y: star.y * window.innerHeight },
     });
 
-    const tl = gsap.timeline({
-      onComplete: () => {
-        addStar(star);
-        router.push("/");
-      },
-    });
-    timelineRef.current = tl;
-
-    // 1) hush: lamp, date and button drift away; the ink fades; the paper glows
-    tl.to(
-      [controlsRef.current, lampRef.current],
-      { opacity: 0, y: 14, duration: 0.5, ease: "power2.in" },
-      0
-    )
-      .to(ink, { opacity: 0, duration: 0.4, ease: "power1.out" }, 0.1)
-      .to(
-        paper,
-        {
-          boxShadow: "0 0 60px 14px rgba(255, 233, 176, 0.5)",
-          duration: 0.7,
-          ease: "sine.out",
-        },
-        0.1
-      )
-      // 2) fold in half, then fold into a little glowing diamond
-      .to(paper, { scaleY: 0.45, duration: 0.5, ease: "power2.inOut" }, 0.8)
-      .to(
-        paper,
-        {
-          scaleX: 0.2,
-          scaleY: 0.2,
-          rotate: 45,
-          duration: 0.6,
-          ease: "power3.in",
-        },
-        1.3
-      )
-      // 3) the paper winks out and the star blooms in the same spot
-      .to(paper, { opacity: 0, duration: 0.12 }, 1.85)
-      .call(() => burst(cx, cy, 34), [], 1.9)
-      .to(
-        starEl,
-        { scale: 1.3, opacity: 1, duration: 0.7, ease: "back.out(2.2)" },
-        1.9
-      )
-      // 4) a slow, floaty flight: x and y use different eases so the path curves
-      .to(
-        starEl,
-        {
-          x: tx - cx,
-          duration: 1.9,
-          ease: "power2.inOut",
-          onUpdate: () => {
-            const r = starEl.getBoundingClientRect();
-            trail(r.left + r.width / 2, r.top + r.height / 2);
-          },
-        },
-        2.7
-      )
-      .to(starEl, { y: ty - cy, duration: 1.9, ease: "power3.inOut" }, 2.7)
-      .to(
-        starEl,
-        { rotate: 360, scale: 0.6, duration: 1.9, ease: "sine.inOut" },
-        2.7
-      )
-      // 5) settle into the sky
-      .call(() => burst(tx, ty, 14), [], 4.6)
-      .to(starEl, { opacity: 0, duration: 0.25 }, 4.6);
+    addStar(star);
+    router.push("/");
   };
 
   return (
@@ -385,12 +278,17 @@ export default function Desk() {
 
       <section className="relative z-10 flex min-h-screen flex-col items-center justify-center px-4 py-6">
         <div className="flex w-full max-w-130 flex-col items-end">
-          <div ref={lampRef} className="-mb-5 mr-6">
+          <div
+            ref={lampRef}
+            className="-mb-5 mr-6"
+            style={{ opacity: sealing ? 0 : 1, transition: "opacity 0.5s ease" }}
+          >
             <Lamp />
           </div>
 
           <div
             ref={paperRef}
+            data-paper
             className="w-full rounded-sm p-6 shadow-2xl"
             style={{ background: "#fbf6e9", color: "#2b2b3a" }}
           >
@@ -413,8 +311,16 @@ export default function Desk() {
           </div>
 
           <div
+            className="mt-4 w-full"
+            style={{ opacity: sealing ? 0 : 1, transition: "opacity 0.5s ease" }}
+          >
+            <EnvelopePicker value={envelope} onChange={setEnvelope} openOn={openOn} />
+          </div>
+
+          <div
             ref={controlsRef}
-            className="mt-4 flex w-full flex-wrap items-center justify-between gap-3"
+            className="mt-3 flex w-full flex-wrap items-center justify-between gap-3"
+            style={{ opacity: sealing ? 0 : 1, transition: "opacity 0.5s ease" }}
           >
             <label
               className="flex items-center gap-2 text-sm"
@@ -470,6 +376,8 @@ export default function Desk() {
           </div>
         </div>
       </section>
+
+      <SealingScene ref={sceneRef} />
     </>
   );
 }
