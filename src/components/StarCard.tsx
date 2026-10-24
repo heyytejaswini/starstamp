@@ -1,15 +1,27 @@
 "use client";
 
-import {
-  useCallback,
-  useEffect,
-  useRef,
-  useState,
-  useSyncExternalStore,
-} from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import gsap from "gsap";
 import { getSupabase } from "@/lib/supabase/client";
+import { DEFAULT_ENVELOPE, loadEnvelope, type EnvelopeOptions } from "@/lib/envelope";
 import type { MyStar } from "@/lib/stars";
+import {
+  ENV_H,
+  ENV_W,
+  GROUP_OFFSET_Y,
+  PAPER,
+  SPARK,
+  morphPathD,
+} from "@/components/envelope/art";
+import {
+  EnvelopeBack,
+  EnvelopeDefs,
+  EnvelopeFlap,
+  EnvelopeFront,
+  SEAL_BOX,
+  WaxSeal,
+} from "@/components/envelope/Envelope";
+import { useFit } from "@/components/envelope/useFit";
 
 type Props = {
   star: MyStar;
@@ -22,75 +34,12 @@ type View =
   | { kind: "open"; body: string }
   | { kind: "locked"; daysLeft: number; remaining: number };
 
-/* ---------- sizes (the whole scene is drawn at this size, then scaled to fit) ---------- */
-const ENV_W = 380;
-const ENV_H = 240;
-const FLAP_H = 135;
 const CARD_W = 330;
 const CARD_H = 230;
-const GROUP_OFFSET_Y = 20; // the envelope sits a little below the screen centre
 const HAND = "'Segoe Print', 'Bradley Hand', cursive";
-
-/* ---------- colours of the envelope (all in your night-sky palette) ---------- */
-const PAPER = "#98b0e4"; // the front of the envelope
-const FLAP_PAPER = "#abbfec"; // the flap, a touch lighter
-const INK = "#26357c"; // the thin dark-blue pen lines
-const CREAM = "#fff7dd";
-const TEAL = "#7fcfd0";
 const CARD_CREAM = "#fbf6e9";
 const NAVY = "#1a2766";
-
-/* ---------- star -> envelope morph ---------- */
-const N = 120; // points around the outline
-
-// A soft five-pointed star: the distance from the centre at each angle
-function starRadius(theta: number) {
-  const k = 0.5 + 0.5 * Math.cos(5 * (theta + Math.PI / 2));
-  return 118 * (0.5 + 0.5 * Math.pow(k, 0.8));
-}
-
-// A rounded rectangle the size of the envelope, as a distance from the centre
-function envelopeRadius(theta: number) {
-  const a = ENV_W / 2;
-  const b = ENV_H / 2;
-  const n = 10; // higher = squarer corners
-  const c = Math.abs(Math.cos(theta)) / a;
-  const s = Math.abs(Math.sin(theta)) / b;
-  return 1 / Math.pow(Math.pow(c, n) + Math.pow(s, n), 1 / n);
-}
-
-// k = 0 is the star, k = 1 is the envelope, in between is a blend of both
-function morphPathD(k: number) {
-  let d = "";
-  for (let i = 0; i < N; i++) {
-    const theta = (i / N) * Math.PI * 2;
-    const r = starRadius(theta) * (1 - k) + envelopeRadius(theta) * k;
-    d += `${i === 0 ? "M" : "L"}${(Math.cos(theta) * r).toFixed(1)} ${(Math.sin(theta) * r).toFixed(1)} `;
-  }
-  return d + "Z";
-}
 const MORPH_START = morphPathD(0);
-
-/* ---------- shapes of the envelope ---------- */
-// The front: the pocket, with a V-shaped top edge that ends in a soft round tip
-const FRONT_D =
-  "M0 0 L168 116 Q190 130 212 116 L380 0 L380 236 Q380 240 376 240 L4 240 Q0 240 0 236 Z";
-// The flap: a triangle with a rounded tip, a little bigger than the V so it covers the edge
-const FLAP_D = "M0 0 L380 0 L214 118 Q190 135 166 118 Z";
-
-/* ---------- little drawing helpers ---------- */
-const SPARK = "M0 -8 Q0 0 8 0 Q0 0 0 8 Q0 0 -8 0 Q0 0 0 -8 Z";
-
-// A five-pointed star outline
-function starD(cx: number, cy: number, outer: number, inner: number) {
-  let d = "";
-  for (let i = 0; i < 10; i++) {
-    const r = i % 2 === 0 ? outer : inner;
-    const a = -Math.PI / 2 + (i * Math.PI) / 5;
-    d += `${i === 0 ? "M" : "L"}${(cx + Math.cos(a) * r).toFixed(1)} ${(cy + Math.sin(a) * r).toFixed(1)} `;
-  }
-  return d + "Z";
-}
 
 // A rectangle whose edges are rows of round bumps (the scalloped panel on the card)
 function scallopPath(w: number, h: number, bump: number) {
@@ -110,109 +59,6 @@ const CARD_MARGIN = 10; // the cream border around the scalloped panel
 const PANEL_W = CARD_W - CARD_MARGIN * 2;
 const PANEL_H = CARD_H - CARD_MARGIN * 2;
 const SCALLOP = scallopPath(PANEL_W, PANEL_H, 12);
-
-// A flat disc of wax with a gently scalloped, slightly uneven edge
-function sealPathD() {
-  let d = "";
-  for (let i = 0; i < 80; i++) {
-    const t = (i / 80) * Math.PI * 2;
-    const r =
-      21 +
-      1.5 * Math.sin(11 * t) +
-      0.8 * Math.sin(3 * t + 0.6);
-    d += `${i === 0 ? "M" : "L"}${(26 + Math.cos(t) * r).toFixed(1)} ${(26 + Math.sin(t) * r).toFixed(1)} `;
-  }
-  return d + "Z";
-}
-const SEAL_PATH = sealPathD();
-
-const LINING_STARS: [number, number][] = [
-  [30, 20], [60, 48], [95, 22], [130, 70], [160, 30], [190, 88], [225, 28],
-  [255, 66], [290, 22], [325, 50], [350, 24], [200, 50], [110, 100], [270, 100],
-];
-
-/* ---------- hand-drawn doodles ---------- */
-
-// Every doodle is drawn twice: a flat colour fill, and a thin pen outline on top.
-// The fill is nudged a tiny bit sideways so it doesn't line up perfectly, like real gouache.
-
-function Rabbit() {
-  const body = "M-24 0 C-31 -16 -24 -33 -4 -35 C12 -36 24 -26 24 -12 C24 -5 21 -1 16 0 Z";
-  const ear1 = "M9 -48 C3 -66 9 -78 15 -75 C21 -72 18 -58 18 -50 Z";
-  const ear2 = "M17 -50 C16 -66 24 -76 29 -71 C33 -66 26 -56 24 -49 Z";
-  const mound =
-    "M-36 3 C-30 -4 -10 -7 8 -5 C28 -7 42 -2 40 6 C38 13 12 15 -10 13 C-30 13 -40 9 -36 3 Z";
-  return (
-    <g>
-      <path d={mound} transform="translate(2 1.5)" fill="#f3e6c0" />
-      <path d={mound} fill="none" stroke={INK} strokeOpacity="0.55" strokeWidth="1" strokeDasharray="1.5 3.2" strokeLinecap="round" />
-      <g transform="translate(1.6 1.2)" fill="#fff8e8">
-        <path d={ear1} />
-        <path d={ear2} />
-        <path d={body} />
-        <circle cx="-25" cy="-10" r="4.5" />
-        <circle cx="15" cy="-40" r="11" />
-      </g>
-      <g fill="none" stroke={INK} strokeWidth="1.3" strokeLinecap="round" strokeLinejoin="round" strokeOpacity="0.9">
-        <path d="M9 -48 C3 -66 9 -78 15 -75 C21 -72 18 -58 18 -50" />
-        <path d="M17 -50 C16 -66 24 -76 29 -71 C33 -66 26 -56 24 -49" />
-        <path d={body} />
-        <circle cx="-25" cy="-10" r="4.5" />
-        <circle cx="15" cy="-40" r="11" />
-        <path d="M-12 -8 C-4 -22 12 -20 14 -6" strokeOpacity="0.55" />
-      </g>
-      <circle cx="19.5" cy="-41" r="1.5" fill={INK} />
-      <circle cx="25.5" cy="-37.5" r="1.1" fill={INK} />
-      <path d="M14 -31 q3 2 6 0" fill="none" stroke={INK} strokeWidth="0.9" strokeLinecap="round" strokeOpacity="0.7" />
-    </g>
-  );
-}
-
-function Fish({ x, y, fill }: { x: number; y: number; fill: string }) {
-  const body = "M0 0 C6 -7 16 -7 22 0 C16 7 6 7 0 0 Z";
-  const tail = "M21 0 L29 -6 L28 6 Z";
-  return (
-    <g transform={`translate(${x} ${y})`}>
-      <g transform="translate(1.2 1)" fill={fill}>
-        <path d={body} />
-        <path d={tail} />
-      </g>
-      <g fill="none" stroke={INK} strokeWidth="1.1" strokeLinejoin="round" strokeLinecap="round" strokeOpacity="0.85">
-        <path d={body} />
-        <path d={tail} />
-      </g>
-      <circle cx="6" cy="-1.5" r="1" fill={INK} />
-      <path d="M11 -3 Q13 0 11 3" fill="none" stroke={INK} strokeWidth="0.8" strokeOpacity="0.6" />
-    </g>
-  );
-}
-
-function DoodleStar({ x, y, r, fill }: { x: number; y: number; r: number; fill: string }) {
-  const d = starD(x, y, r, r * 0.48);
-  return (
-    <g>
-      <path d={d} transform="translate(1.2 1)" fill={fill} />
-      <path d={d} fill="none" stroke={INK} strokeWidth="1.2" strokeLinejoin="round" strokeOpacity="0.9" />
-    </g>
-  );
-}
-
-/* ---------- shrink the scene to fit small screens ---------- */
-function subscribeResize(callback: () => void) {
-  window.addEventListener("resize", callback);
-  return () => window.removeEventListener("resize", callback);
-}
-function useFitScale() {
-  return useSyncExternalStore(
-    subscribeResize,
-    () => {
-      const byWidth = (window.innerWidth - 24) / ENV_W;
-      const byHeight = (window.innerHeight - 40) / 520;
-      return Math.round(Math.min(1, byWidth, byHeight) * 100) / 100;
-    },
-    () => 1
-  );
-}
 
 /* ---------- the hourglass (for sealed letters) ---------- */
 const GLASS =
@@ -315,9 +161,11 @@ function PostCard({
 }
 
 /* ---------- the whole thing ---------- */
+/* ---------- the whole thing ---------- */
 export default function StarCard({ star, origin, onClose }: Props) {
   const [view, setView] = useState<View>({ kind: "loading" });
-  const fit = useFitScale();
+  const fit = useFit(ENV_W);
+  const [envelope, setEnvelope] = useState<EnvelopeOptions>(DEFAULT_ENVELOPE);
 
   // Values we only want from the moment the card opened (the animation is built once).
   const fitRef = useRef(fit);
@@ -376,6 +224,17 @@ export default function StarCard({ star, origin, onClose }: Props) {
     };
   }, [star.id, star.openOn, star.createdAt]);
 
+  // Which envelope did the writer choose? (old letters have none, so they get design A)
+  useEffect(() => {
+    let alive = true;
+    loadEnvelope(star.id).then((e) => {
+      if (alive) setEnvelope(e);
+    });
+    return () => {
+      alive = false;
+    };
+  }, [star.id]);
+
   // Build the opening animation once.
   useEffect(() => {
     const backdrop = backdropRef.current;
@@ -385,13 +244,14 @@ export default function StarCard({ star, origin, onClose }: Props) {
     const back = backRef.current;
     const card = cardRef.current;
     const front = frontRef.current;
-    const flap = flapRef.current;
+    const flapWrap = flapRef.current;
+    const flap = flapWrap?.querySelector<HTMLElement>("[data-flap]") ?? null;
     const seal = sealRef.current;
     const sparksBox = sparksRef.current;
     const content = contentRef.current;
     const closeBtn = closeBtnRef.current;
     if (!backdrop || !morph || !morphPathEl || !group || !back || !card || !front) return;
-    if (!flap || !seal || !sparksBox || !content || !closeBtn) return;
+    if (!flapWrap || !flap || !seal || !sparksBox || !content || !closeBtn) return;
 
     const reduce = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
     speedRef.current = reduce ? 40 : 1.7;
@@ -408,7 +268,7 @@ export default function StarCard({ star, origin, onClose }: Props) {
       (window.innerHeight - 80) / (CARD_H * scale)
     );
     const sparks = Array.from(sparksBox.children);
-    const faces = Array.from(flap.querySelectorAll<HTMLElement>("[data-face]"));
+    const faces = Array.from(flapWrap.querySelectorAll<HTMLElement>("[data-face]"));
 
     const ctx = gsap.context(() => {
       gsap.set(morph, { x: ox, y: oy, scale: 0.1, rotation: -72, opacity: 1 });
@@ -455,13 +315,13 @@ export default function StarCard({ star, origin, onClose }: Props) {
         .to(sparks, { opacity: 0, duration: 0.6 }, 2.25)
         // 4. the flap swings open, and drops behind the card halfway
         .to(flap, { rotationX: -180, duration: 0.8, ease: "power2.inOut" }, 2.3)
-        .set(flap, { zIndex: 1 }, 2.7)
+        .set(flapWrap, { zIndex: 1 }, 2.7)
         // 5. the card slides up out of the envelope
         .to(card, { y: -150, duration: 0.8, ease: "power2.out" }, 3.05)
         // 6. the envelope sinks and softens while the card comes forward to be read
         .to([back, front, ...faces], { opacity: 0.25, duration: 0.7, ease: "power1.inOut" }, 3.6)
         .set(card, { zIndex: 8 }, 3.75)
-        .to([back, front, flap], { y: 170, duration: 0.9, ease: "power2.inOut" }, 3.8)
+        .to([back, front, flapWrap], { y: 170, duration: 0.9, ease: "power2.inOut" }, 3.8)
         .to(card, { scale: present, duration: 0.9, ease: "power2.inOut" }, 3.8)
         .fromTo(content, { opacity: 0 }, { opacity: 1, duration: 0.6 }, 4.3)
         .fromTo(closeBtn, { opacity: 0 }, { opacity: 1, duration: 0.4 }, 4.5);
@@ -499,12 +359,10 @@ export default function StarCard({ star, origin, onClose }: Props) {
     return () => window.removeEventListener("keydown", onKey);
   }, [requestClose]);
 
-  const shortDate = new Date(star.createdAt)
-    .toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "2-digit" })
-    .toUpperCase();
   const dateFormat = { day: "numeric", month: "long", year: "numeric" } as const;
   const written = new Date(star.createdAt).toLocaleDateString("en-IN", dateFormat);
   const opensOn = new Date(`${star.openOn}T00:00:00`).toLocaleDateString("en-IN", dateFormat);
+  const meta = { createdAt: star.createdAt, openOn: star.openOn };
 
   return (
     <div
@@ -562,51 +420,17 @@ export default function StarCard({ star, origin, onClose }: Props) {
           </svg>
         </div>
 
-        {/* the envelope */}
+        {/* the envelope (the same pieces the sealing animation used) */}
         <div
           ref={groupRef}
           data-keep
           className="pointer-events-auto absolute inset-0"
           style={{ opacity: 0, perspective: 900, isolation: "isolate" }}
         >
-          {/* shared "paint effects": wobbly pen lines, paper grain, soft shadow */}
-          <svg width="0" height="0" style={{ position: "absolute" }} aria-hidden="true">
-            <defs>
-              <filter id="wobble" filterUnits="userSpaceOnUse" x="-10" y="-10" width="420" height="300" colorInterpolationFilters="sRGB">
-                <feTurbulence type="fractalNoise" baseFrequency="0.04" numOctaves="2" seed="8" result="w" />
-                <feDisplacementMap in="SourceGraphic" in2="w" scale="3" xChannelSelector="R" yChannelSelector="G" />
-              </filter>
-              <filter id="wobbleSm" filterUnits="userSpaceOnUse" x="-10" y="-10" width="420" height="300" colorInterpolationFilters="sRGB">
-                <feTurbulence type="fractalNoise" baseFrequency="0.09" numOctaves="2" seed="3" result="w" />
-                <feDisplacementMap in="SourceGraphic" in2="w" scale="2.6" xChannelSelector="R" yChannelSelector="G" />
-              </filter>
-              <filter id="grainLight" filterUnits="userSpaceOnUse" x="0" y="0" width="400" height="300" colorInterpolationFilters="sRGB">
-                <feTurbulence type="fractalNoise" baseFrequency="0.8" numOctaves="2" seed="5" />
-                <feColorMatrix type="matrix" values="0 0 0 0 1  0 0 0 0 1  0 0 0 0 0.95  2.6 0 0 0 -1.15" />
-              </filter>
-              <filter id="grainDark" filterUnits="userSpaceOnUse" x="0" y="0" width="400" height="300" colorInterpolationFilters="sRGB">
-                <feTurbulence type="fractalNoise" baseFrequency="0.7" numOctaves="2" seed="11" />
-                <feColorMatrix type="matrix" values="0 0 0 0 0.1  0 0 0 0 0.15  0 0 0 0 0.4  2.6 0 0 0 -1.1" />
-              </filter>
-              <filter id="fibre" filterUnits="userSpaceOnUse" x="0" y="0" width="400" height="300" colorInterpolationFilters="sRGB">
-                <feTurbulence type="fractalNoise" baseFrequency="0.015 0.35" numOctaves="3" seed="2" />
-                <feColorMatrix type="matrix" values="0 0 0 0 0.15  0 0 0 0 0.2  0 0 0 0 0.5  2.2 0 0 0 -0.95" />
-              </filter>
-              <filter id="softShadow" filterUnits="userSpaceOnUse" x="-20" y="-20" width="420" height="190">
-                <feGaussianBlur stdDeviation="3" />
-              </filter>
-            </defs>
-          </svg>
+          <EnvelopeDefs />
 
-          {/* inside of the envelope */}
           <div ref={backRef} className="absolute inset-0" style={{ zIndex: 1 }}>
-            <svg width={ENV_W} height={ENV_H} viewBox={`0 0 ${ENV_W} ${ENV_H}`} aria-hidden="true">
-              <rect width={ENV_W} height={ENV_H} rx="4" fill="#2a3a85" />
-              {LINING_STARS.map(([x, y], i) => (
-                <circle key={i} cx={x} cy={y} r={i % 3 === 0 ? 1.6 : 1} fill="#ffe9b0" opacity="0.5" />
-              ))}
-              <rect width={ENV_W} height={ENV_H} filter="url(#grainLight)" opacity="0.25" />
-            </svg>
+            <EnvelopeBack />
           </div>
 
           {/* the card, resting inside */}
@@ -669,194 +493,16 @@ export default function StarCard({ star, origin, onClose }: Props) {
             </PostCard>
           </div>
 
-          {/* the front of the envelope */}
           <div ref={frontRef} className="absolute inset-0" style={{ zIndex: 3 }}>
-            <svg width={ENV_W} height={ENV_H} viewBox={`0 0 ${ENV_W} ${ENV_H}`} aria-hidden="true">
-              <defs>
-                <clipPath id="frontClip">
-                  <path d={FRONT_D} />
-                </clipPath>
-              </defs>
-
-              {/* flat paper colour */}
-              <path d={FRONT_D} fill={PAPER} />
-
-              {/* doodles, drawn with a slightly shaky pen */}
-              <g filter="url(#wobble)">
-                <g transform="translate(58 218)">
-                  <Rabbit />
-                </g>
-                <DoodleStar x={108} y={131} r={6} fill={CREAM} />
-                <DoodleStar x={34} y={68} r={7} fill={CREAM} />
-                <DoodleStar x={64} y={104} r={4.5} fill={TEAL} />
-                <DoodleStar x={346} y={62} r={6} fill={CREAM} />
-                <DoodleStar x={318} y={102} r={4} fill={TEAL} />
-                {/* a little moon */}
-                <g transform="translate(262 112)">
-                  <path d="M0 -9 A9 9 0 1 0 9 6 A7 7 0 1 1 0 -9 Z" transform="translate(1.2 1)" fill={CREAM} />
-                  <path d="M0 -9 A9 9 0 1 0 9 6 A7 7 0 1 1 0 -9 Z" fill="none" stroke={INK} strokeWidth="1.2" strokeLinejoin="round" strokeOpacity="0.9" />
-                </g>
-                {/* a row of little fish, swimming along the bottom */}
-                <Fish x={136} y={227} fill="#fff8e8" />
-                <Fish x={176} y={227} fill={TEAL} />
-                <Fish x={216} y={227} fill="#5a74bd" />
-                {/* tiny sparkles and a dotted trail */}
-                {([[142, 100, 0.8], [236, 92, 0.65], [20, 150, 0.7], [364, 150, 0.6], [86, 128, 0.5]] as const).map(([x, y, s], i) => (
-                  <path key={i} d={SPARK} transform={`translate(${x} ${y}) scale(${s})`} fill={CREAM} fillOpacity="0.9" stroke={INK} strokeWidth="0.8" strokeOpacity="0.5" />
-                ))}
-                <path d="M92 168 C 100 156, 104 148, 108 140" fill="none" stroke={INK} strokeOpacity="0.55" strokeWidth="1.1" strokeDasharray="1.5 4" strokeLinecap="round" />
-              </g>
-
-              {/* the handwritten label: a stepped patch of paint with writing on it */}
-              <g filter="url(#wobbleSm)">
-                <path
-                  d="M126 160 L206 156 L208 169 L268 165 L271 194 L130 198 Z"
-                  fill="#5a74bd"
-                  stroke={INK}
-                  strokeOpacity="0.7"
-                  strokeWidth="1.1"
-                  strokeLinejoin="round"
-                />
-              </g>
-              <text x="138" y="186" fontSize="18" fill={CREAM} fontFamily={HAND} transform="rotate(-2 138 186)">
-                for future me
-              </text>
-              <text x="132" y="213" fontSize="11" fill={INK} fillOpacity="0.9" fontFamily={HAND}>
-                from your younger self ✦
-              </text>
-
-              {/* the stamp, with a star in your star's colour */}
-              <g transform="translate(298 142)">
-                <rect x="0" y="0" width="54" height="66" fill="#fbf3dc" stroke={PAPER} strokeWidth="5" strokeDasharray="0 6" strokeLinecap="round" />
-                <rect x="6" y="6" width="42" height="42" rx="2" fill="#1b2a6b" />
-                <path d={SPARK} transform="translate(27 27) scale(1.7)" fill={`hsl(${star.hue}, 90%, 85%)`} />
-                <text x="27" y="60" fontSize="6" textAnchor="middle" fill="#3a2f1f" letterSpacing="1">
-                  STARSTAMP
-                </text>
-              </g>
-
-              {/* the postmark */}
-              <g transform="translate(286 216)" opacity="0.9" filter="url(#wobbleSm)">
-                <circle r="21" fill="none" stroke="#1b2a6b" strokeWidth="1.4" strokeDasharray="2 2.5" />
-                <circle r="15" fill="none" stroke="#1b2a6b" strokeWidth="1" />
-                <text y="2.5" fontSize="6" textAnchor="middle" fill="#1b2a6b">
-                  {shortDate}
-                </text>
-              </g>
-
-              {/* the pen outline around the whole envelope */}
-              <path
-                d={FRONT_D}
-                fill="none"
-                stroke={INK}
-                strokeOpacity="0.65"
-                strokeWidth="1.4"
-                strokeLinejoin="round"
-                filter="url(#wobble)"
-              />
-
-              {/* paper texture on top of everything */}
-              <g clipPath="url(#frontClip)" style={{ pointerEvents: "none" }}>
-                <rect width={ENV_W} height={ENV_H} filter="url(#fibre)" opacity="0.2" />
-                <rect width={ENV_W} height={ENV_H} filter="url(#grainDark)" opacity="0.3" />
-                <rect width={ENV_W} height={ENV_H} filter="url(#grainLight)" opacity="0.35" />
-              </g>
-            </svg>
+            <EnvelopeFront options={envelope} meta={meta} />
           </div>
 
-          {/* the flap: an outer face and an inner face, joined at the top edge */}
-          <div
-            ref={flapRef}
-            className="absolute left-0 top-0"
-            style={{
-              width: ENV_W,
-              height: FLAP_H,
-              zIndex: 4,
-              transformStyle: "preserve-3d",
-              transformOrigin: "50% 0%",
-            }}
-          >
-            <div
-              data-face
-              className="absolute inset-0"
-              style={{ backfaceVisibility: "hidden", WebkitBackfaceVisibility: "hidden" }}
-            >
-              <svg width={ENV_W} height={FLAP_H} viewBox={`0 0 ${ENV_W} ${FLAP_H}`} aria-hidden="true" style={{ overflow: "visible" }}>
-                <defs>
-                  <clipPath id="flapClip">
-                    <path d={FLAP_D} />
-                  </clipPath>
-                </defs>
-                {/* soft shadow the flap throws on the envelope */}
-                <path d={FLAP_D} transform="translate(0 5)" fill="rgba(20, 30, 90, 0.35)" filter="url(#softShadow)" />
-                <path d={FLAP_D} fill={FLAP_PAPER} />
-                <g filter="url(#wobble)">
-                  <path
-                    d="M22 6 L170 107 Q190 121 210 107 L358 6"
-                    fill="none"
-                    stroke={INK}
-                    strokeOpacity="0.45"
-                    strokeWidth="1.1"
-                    strokeDasharray="1.5 6"
-                    strokeLinecap="round"
-                  />
-                  <DoodleStar x={112} y={36} r={6} fill={CREAM} />
-                  <DoodleStar x={272} y={32} r={5} fill={TEAL} />
-                  <path d={SPARK} transform="translate(190 30) scale(0.7)" fill={CREAM} stroke={INK} strokeWidth="0.8" strokeOpacity="0.5" />
-                </g>
-                <path
-                  d={FLAP_D}
-                  fill="none"
-                  stroke={INK}
-                  strokeOpacity="0.65"
-                  strokeWidth="1.4"
-                  strokeLinejoin="round"
-                  filter="url(#wobble)"
-                />
-                <g clipPath="url(#flapClip)" style={{ pointerEvents: "none" }}>
-                  <rect width={ENV_W} height={FLAP_H} filter="url(#fibre)" opacity="0.2" />
-                  <rect width={ENV_W} height={FLAP_H} filter="url(#grainDark)" opacity="0.3" />
-                  <rect width={ENV_W} height={FLAP_H} filter="url(#grainLight)" opacity="0.35" />
-                </g>
-              </svg>
-            </div>
-            <div
-              data-face
-              className="absolute inset-0"
-              style={{
-                transform: "rotateY(180deg)",
-                backfaceVisibility: "hidden",
-                WebkitBackfaceVisibility: "hidden",
-              }}
-            >
-              <svg width={ENV_W} height={FLAP_H} viewBox={`0 0 ${ENV_W} ${FLAP_H}`} aria-hidden="true">
-                <path d={FLAP_D} fill="#27357f" stroke="rgba(255,233,176,0.35)" strokeWidth="1" strokeLinejoin="round" />
-                {LINING_STARS.slice(0, 9).map(([x, y], i) => (
-                  <circle key={i} cx={x} cy={Math.min(y, 70) * 0.9} r={i % 3 === 0 ? 1.6 : 1} fill="#ffe9b0" opacity="0.55" />
-                ))}
-                <path d={FLAP_D} fill="none" stroke={INK} strokeOpacity="0.6" strokeWidth="1.2" strokeLinejoin="round" filter="url(#wobble)" />
-              </svg>
-            </div>
+          <div ref={flapRef} className="absolute inset-0" style={{ zIndex: 4, perspective: 900 }}>
+            <EnvelopeFlap />
           </div>
 
-          {/* the wax seal on the flap tip: a flat blob of wax pressed with a little star */}
-          <div ref={sealRef} className="absolute" style={{ left: 164, top: 102, width: 52, height: 52, zIndex: 6, opacity: 0 }}>
-            <svg width="52" height="52" viewBox="0 0 52 52" aria-hidden="true">
-              <defs>
-                <clipPath id="sealClip">
-                  <path d={SEAL_PATH} />
-                </clipPath>
-              </defs>
-              <g filter="url(#wobbleSm)">
-                <path d={SEAL_PATH} transform="translate(1.6 2)" fill="rgba(30, 20, 70, 0.4)" />
-                <path d={SEAL_PATH} fill="#d3a24c" stroke="#8a5d1c" strokeOpacity="0.8" strokeWidth="1.3" strokeLinejoin="round" />
-                <circle cx="26" cy="26" r="14" fill="none" stroke="#8a5d1c" strokeOpacity="0.6" strokeWidth="1.1" strokeDasharray="2.5 2.8" strokeLinecap="round" />
-                <path d={starD(26.5, 26.5, 9.5, 4.4)} fill="#a8741f" fillOpacity="0.55" stroke="#6b430f" strokeWidth="1.4" strokeLinejoin="round" />
-              </g>
-              <g clipPath="url(#sealClip)">
-                <rect width="52" height="52" filter="url(#grainDark)" opacity="0.22" />
-              </g>
-            </svg>
+          <div ref={sealRef} className="absolute" style={{ zIndex: 6, ...SEAL_BOX, opacity: 0 }}>
+            <WaxSeal options={envelope} />
           </div>
 
           {/* sparkles that burst out when the seal breaks */}
