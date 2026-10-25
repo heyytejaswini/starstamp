@@ -120,3 +120,23 @@ export async function saveLetter(input: {
     }
   }
 }
+
+// delete letters feature 
+
+// Delete one unlocked letter. The database also removes its text, its shared
+// star, and every light and report attached to it (cascade).
+export async function deleteLetter(id: string) {
+  const supabase = getSupabase();
+  const { data, error } = await supabase
+    .from("letters")
+    .delete()
+    .eq("id", id)
+    .select("id");
+  if (error) throw new Error(error.message);
+  // The rules hide rows silently, so zero rows back means nothing was deleted.
+  if (!data || data.length === 0) {
+    throw new Error("This letter could not be deleted.");
+  }
+  // Take the star out of the sky's memory too.
+  cache = cache.filter((s) => s.id !== id);
+}
