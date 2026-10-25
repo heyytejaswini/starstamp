@@ -92,6 +92,27 @@ function buildConstellation(
   return edges;
 }
 
+// A soft glow, painted ONCE into a small hidden canvas per colour, then stamped onto the sky.
+// (Building a fresh gradient for every star on every frame is slow.)
+const GLOW = 64; // size of the sprite in pixels
+const glowSprites = new Map<number, HTMLCanvasElement>();
+function glowFor(hue: number) {
+  let sprite = glowSprites.get(hue);
+  if (!sprite) {
+    sprite = document.createElement("canvas");
+    sprite.width = GLOW;
+    sprite.height = GLOW;
+    const g = sprite.getContext("2d")!;
+    const grad = g.createRadialGradient(GLOW / 2, GLOW / 2, 0, GLOW / 2, GLOW / 2, GLOW / 2);
+    grad.addColorStop(0, `hsla(${hue}, 90%, 82%, 0.55)`);
+    grad.addColorStop(1, `hsla(${hue}, 90%, 82%, 0)`);
+    g.fillStyle = grad;
+    g.fillRect(0, 0, GLOW, GLOW);
+    glowSprites.set(hue, sprite);
+  }
+  return sprite;
+}
+
 const HIT_RADIUS = 28; // how close (in pixels) a click must be to count
 
 type Props = {
@@ -136,7 +157,7 @@ export default function Sky({ onStarClick }: Props) {
     let edges: [number, number][] = [];
 
     const resize = () => {
-      const dpr = window.devicePixelRatio || 1;
+      const dpr = Math.min(window.devicePixelRatio || 1, 2); // 3x screens are not worth the cost
       width = window.innerWidth;
       height = window.innerHeight;
       canvas.width = width * dpr;
@@ -228,10 +249,16 @@ export default function Sky({ onStarClick }: Props) {
         line.addColorStop(0, `hsla(${from.hue}, 90%, 85%, ${shimmer})`);
         line.addColorStop(1, `hsla(${to.hue}, 90%, 85%, ${shimmer})`);
 
+        // the glow: a wide, faint line under a thin, bright one (much cheaper than shadowBlur)
         ctx.strokeStyle = line;
+        ctx.globalAlpha = 0.28;
+        ctx.lineWidth = 5;
+        ctx.beginPath();
+        ctx.moveTo(a.x, a.y);
+        ctx.lineTo(b.x, b.y);
+        ctx.stroke();
+        ctx.globalAlpha = 1;
         ctx.lineWidth = 1.3;
-        ctx.shadowColor = `hsla(${from.hue}, 100%, 80%, 0.9)`;
-        ctx.shadowBlur = 12;
         ctx.beginPath();
         ctx.moveTo(a.x, a.y);
         ctx.lineTo(b.x, b.y);
@@ -240,7 +267,6 @@ export default function Sky({ onStarClick }: Props) {
         // a tiny light drifting along the thread
         if (!reduceMotion) {
           const p = (t * 0.12 + i * 0.37) % 1;
-          ctx.shadowBlur = 14;
           ctx.fillStyle = "rgba(255, 255, 255, 0.9)";
           ctx.beginPath();
           ctx.arc(a.x + (b.x - a.x) * p, a.y + (b.y - a.y) * p, 1.8, 0, Math.PI * 2);
@@ -259,13 +285,7 @@ export default function Sky({ onStarClick }: Props) {
         const pulse = reduceMotion ? 1 : 1 + 0.15 * Math.sin(t * 1.5 + m.x * 10);
         const r = 9 * pulse * (isHover ? 1.3 : 1);
 
-        const glow = ctx.createRadialGradient(px, py, 0, px, py, r * 3);
-        glow.addColorStop(0, `hsla(${m.hue}, 90%, 82%, 0.55)`);
-        glow.addColorStop(1, `hsla(${m.hue}, 90%, 82%, 0)`);
-        ctx.fillStyle = glow;
-        ctx.beginPath();
-        ctx.arc(px, py, r * 3, 0, Math.PI * 2);
-        ctx.fill();
+        ctx.drawImage(glowFor(m.hue), px - r * 3, py - r * 3, r * 6, r * 6);
 
         ctx.fillStyle = `hsl(${m.hue}, 90%, 88%)`;
         drawSparkle(ctx, px, py, r);
