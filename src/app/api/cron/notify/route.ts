@@ -1,8 +1,6 @@
 import { createClient } from "@supabase/supabase-js";
 import nodemailer from "nodemailer";
 
-export const dynamic = "force-dynamic";
-
 export async function GET(req: Request) {
   // 1. Only Vercel's scheduler (or you) may call this.
   if (req.headers.get("authorization") !== `Bearer ${process.env.CRON_SECRET}`) {
