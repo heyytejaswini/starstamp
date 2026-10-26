@@ -116,7 +116,7 @@ export default function LettersPage() {
   return (
     <main className="relative min-h-screen overflow-hidden text-white">
       <Sky key={skyKey} />
-      <Link href="/" className="fixed left-4 top-4 z-10 text-sm" style={muted}>
+      <Link href="/" className="fixed left-4 top-4 z-20 p-2 text-sm" style={muted}>
         ← the sky
       </Link>
 
