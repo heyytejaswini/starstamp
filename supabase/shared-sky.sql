@@ -104,3 +104,30 @@ create trigger reports_auto_hide
   for each row execute function hide_reported_star();
 
   /* git add . && git commit -m "Add profiles, hidden stars, public read rules, report limits"  */
+
+  /* new changes to the previous shared sky letters read policy */
+
+  -- a hidden flag on letters too
+alter table letters add column if not exists hidden boolean not null default false;
+
+-- letters read rule: no more looking inside stars
+drop policy if exists "letters read" on letters;
+create policy "letters read" on letters for select using (
+  author_id = (select auth.uid())
+  or (
+    is_public and unlock_type = 'date' and unlock_at <= now()
+    and not hidden
+  )
+);
+
+-- the report trigger now hides the star AND its letter
+create or replace function hide_reported_star() returns trigger
+language plpgsql security definer set search_path = public as $$
+begin
+  if (select count(*) from reports where star_id = new.star_id) >= 7 then
+    update stars set hidden = true where id = new.star_id;
+    update letters set hidden = true
+      where id = (select letter_id from stars where id = new.star_id);
+  end if;
+  return new;
+end $$;
