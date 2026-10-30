@@ -6,6 +6,7 @@ import Link from "next/link";
 import gsap from "gsap";
 import { DESK } from "@/lib/animation/config";
 import { addStar, saveLetter, starFromId } from "@/lib/stars";
+import { cleanUsername, getMyUsername, saveUsername, USERNAME_RULE } from "@/lib/profile";
 import { getSupabase } from "@/lib/supabase/client";
 import EnvelopePicker from "@/components/envelope/EnvelopePicker";
 import SealingScene, { type SealSceneHandle } from "@/components/envelope/SealingScene";
@@ -66,6 +67,10 @@ export default function Desk() {
   const [error, setError] = useState("");
   // null = still checking, true = signed in, false = signed out
   const [signedIn, setSignedIn] = useState<boolean | null>(null);
+  // the saved username: undefined = still checking, null = none yet, string = has one
+  const [myName, setMyName] = useState<string | null | undefined>(undefined);
+  // what the person is typing in the name box
+  const [nameInput, setNameInput] = useState("");
   // which envelope the person picked (design A until they change it)
   const [envelope, setEnvelope] = useState<EnvelopeOptions>(DEFAULT_ENVELOPE);
 
@@ -118,6 +123,7 @@ export default function Desk() {
       setIsPublic(false);
       setError("");
       setEnvelope(DEFAULT_ENVELOPE);
+      setNameInput("");
     };
   }, []);
 
@@ -133,6 +139,19 @@ export default function Desk() {
       alive = false;
     };
   }, []);
+
+  // once we know they're signed in, look up their saved username
+  useEffect(() => {
+    if (signedIn !== true) return;
+    let alive = true;
+    getMyUsername().then((name) => {
+      if (alive) setMyName(name);
+    });
+    return () => {
+      alive = false;
+    };
+  }, [signedIn]);
+
   // the loop that moves and draws the charms (typing charms + sealing sparkles)
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -210,8 +229,17 @@ export default function Desk() {
     setText(next);
   };
 
-    const canSeal =
-    !sealing && signedIn === true && text.trim().length > 0 && openOn !== "";
+  // a public letter needs a name: ask only if they don't have one saved yet
+  const needsName = isPublic && myName === null;
+  const nameOk = !needsName || USERNAME_RULE.test(cleanUsername(nameInput));
+
+  const canSeal =
+    !sealing &&
+    signedIn === true &&
+    text.trim().length > 0 &&
+    openOn !== "" &&
+    (!isPublic || myName !== undefined) &&
+    nameOk;
 
     const seal = async () => {
     if (!canSeal) return;
@@ -221,6 +249,7 @@ export default function Desk() {
     const star = starFromId(crypto.randomUUID(), openOn);
 
     try {
+      if (needsName) setMyName(await saveUsername(nameInput));
       await saveLetter({ star, body: text, isPublic });
     } catch (err) {
       setSealing(false);
@@ -348,7 +377,7 @@ export default function Desk() {
             >
               Seal with a star
             </button>
-                        <label
+            <label
               className="flex w-full items-center gap-2 text-sm"
               style={{ color: "rgba(220, 230, 255, 0.85)" }}
             >
@@ -359,6 +388,40 @@ export default function Desk() {
               />
               Let this open for everyone as a star in the shared sky
             </label>
+
+            {needsName && (
+              <div className="w-full">
+                <label
+                  className="flex w-full flex-wrap items-center gap-2 text-sm"
+                  style={{ color: "rgba(220, 230, 255, 0.85)" }}
+                >
+                  Your name on the shared sky
+                  <input
+                    type="text"
+                    value={nameInput}
+                    onChange={(e) =>
+                      setNameInput(e.target.value.toLowerCase().replace(/[^a-z0-9_]/g, ""))
+                    }
+                    maxLength={20}
+                    placeholder="e.g. moonlit_fox"
+                    autoComplete="off"
+                    spellCheck={false}
+                    className="rounded px-2 py-1"
+                    style={{ background: "rgba(255, 255, 255, 0.1)" }}
+                  />
+                </label>
+                <p className="mt-1 text-xs" style={{ color: "rgba(220, 230, 255, 0.6)" }}>
+                  3 to 20 letters, numbers or underscores. You choose it once, and it
+                  appears on every public letter you share.
+                </p>
+              </div>
+            )}
+            {isPublic && myName && (
+              <p className="w-full text-xs" style={{ color: "rgba(220, 230, 255, 0.7)" }}>
+                Sharing as <span style={{ color: "#ffe9b0" }}>{myName}</span>
+              </p>
+            )}
+
             {signedIn === false && (
               <p className="w-full text-sm" style={{ color: "#ffe9b0" }}>
                 Please{" "}
